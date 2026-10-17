@@ -1,0 +1,26 @@
+[Unit]
+Description=Nibe service USB gateway for Home Assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nibe
+SupplementaryGroups=dialout
+Environment=NIBE_SERVICE_USB_CONFIG=/etc/nibe-service-usb/config.toml
+Environment=NIBE_SERVICE_USB_DATA_DIR=/var/lib/nibe-service-usb
+ExecStart=/opt/nibe-service-usb/.venv/bin/nibe-service-usb run
+Restart=on-failure
+RestartSec=5
+StateDirectory=nibe-service-usb
+StateDirectoryMode=0700
+ConfigurationDirectory=nibe-service-usb
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+DeviceAllow=char-ttyACM rw
+DevicePolicy=closed
+
+[Install]
+WantedBy=multi-user.target

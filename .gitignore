@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# runtime data (keys, state) must never be committed
+data/
+*.key
+config.local.toml
+# stray logs at the repo root
+/*.log

@@ -1,0 +1,96 @@
+# nibe-service-usb example configuration
+#
+# Every key is optional and every value below is the built-in default. Copy only
+# the keys you want to change. Usually that is just pump.port.
+# Unknown keys are an error (this catches typos), and values are range-checked.
+#
+# Where the server looks for this file (first match wins):
+#   1. --config PATH (an option of each command, e.g. `nibe-service-usb run --config PATH`)
+#   2. $NIBE_SERVICE_USB_CONFIG
+#   3. /etc/nibe-service-usb/config.toml
+#   (none found: built-in defaults)
+#
+# Check a file with:  nibe-service-usb check-config --config PATH
+# Full reference:     docs/configuration.md
+
+[pump]
+port = "/dev/ttyACM0"               # service USB port (CDC-ACM). With several ACM devices use the
+                                    # stable /dev/serial/by-id/usb-... path instead
+baudrate = 115200                   # ignored by CDC-ACM (virtual serial port); kept configurable
+rts = true                          # the console only answers with RTS asserted; keep true
+dtr = true
+ri_batch_size = 9                   # registers per RI command, 1..10 (the console reads at most 10)
+max_line_length = 61                # hard limit per command line, 16..61 (62 characters break the console)
+request_timeout = 3.0               # seconds to wait for one reply
+retries = 2                         # retries per request before it fails
+offline_after = 60                  # seconds without any reply before the pump counts as offline
+daily_check_time = "03:30"          # daily identity / clock / EEPROM health check, local time "HH:MM"
+max_clock_drift = 120               # seconds; pump clock reported as unset (year < 2020) | ok | drifting
+
+[server]
+listen_host = "0.0.0.0"             # all interfaces; set one address to listen (and advertise) only there
+listen_port = 9477                  # TCP port the Home Assistant integration connects to
+max_clients = 4                     # simultaneous authenticated connections
+idle_timeout = 600                  # seconds of silence before an authenticated client is dropped
+
+[discovery]                         # mDNS / zeroconf, service type _nibe-usb._tcp.local.
+enabled = true                      # false: no announcement; add the gateway in HA by host and port
+name = "Nibe heat pump"             # shown in the HA discovery card; the instance name is
+                                    # "<name>-<first 8 hex digits of the server id>"
+model = ""                          # optional, announced in the TXT record, e.g. "F1226-6 R"
+
+[watchdog]
+timeout = 300                       # seconds without a heartbeat from HA before reverting; minimum 120
+                                    # (HA pings every 60 s; the watchdog never trips before the first heartbeat)
+
+[defaults]                          # applied when the watchdog trips
+hot_water_mode = "normal"           # eco | normal | lux; "" = leave the hot water mode untouched
+# the heating request always reverts to "auto"; not configurable
+
+[poll]
+interval = 600                      # seconds between full sensor polls (everything incl. slow counters); minimum 60
+fast_interval = 60                  # seconds between fast polls: temperatures, pump speeds, states, alarms,
+                                    # degree minutes, uptime; 10..interval
+settings_every = 6                  # pump settings are read every Nth full poll (6 x 600 s = hourly)
+sensors_file = ""                   # path to your own copy of sensors.yaml; "" = the packaged one
+diagnostic = false                  # also poll the diagnostic tier (relay bits, AUX inputs, ...)
+
+[heating]
+# Degree-minute (DM) control for set_heating_request enable/disable.
+# All DM values are RAW pump units: raw = 10 x the DM shown on the display.
+# See docs/heating-control.md before changing anything here.
+dm_push_interval = 600              # seconds between evaluations while enable/disable is active
+dm_disable_value = -1               # disable writes this (raw -1 = -0.1 DM); must be within [dm_min, dm_max]
+dm_start_threshold = 0              # 0 = use the pump's "start compressor" setting (R47206) x 10;
+                                    # non-zero = override, raw units
+dm_enable_margin = 1                # enable writes start threshold + margin (e.g. -2000 + 1 = -1999); >= 0
+dm_min = -15000                     # lowest value ever written, >= -15000
+dm_max = 0                          # highest value ever written, <= 0
+dm_write_method = "ram"             # ram = WM to dm_ram_address (no EEPROM wear)
+                                    # register = WI 40940 (one EEPROM store per write; fallback)
+dm_ram_address = "0x2038af18"       # RAM copy of R40940, found on F1226-6 R firmware 7994R7. May differ on
+                                    # other models/firmware; verified against RI 40940 at startup and no DM
+                                    # is written if it does not match. Hex string or integer.
+dm_write_policy = "always"          # always | threshold (economy mode: disable writes only near the threshold)
+dm_guard_fraction = 0.5             # threshold policy only: fraction of the start threshold, 0..1
+max_writes_per_day = 100            # register method only: daily cap on EEPROM-costing writes
+
+[safety]
+# Guards for heating "disable" only: while one is violated nothing is written and the pump heats
+# on its own. TOML has no null: `false` disables a guard; an omitted key keeps its default.
+# min_room_temp needs a BT50 room sensor; it is off by default. Without BT50 the guard would
+# always report stale data. Example:
+# min_room_temp = 18.0
+min_supply_temp = 20.0              # °C, flow temperature BT2
+min_outdoor_temp = -15.0            # °C, outdoor temperature BT1 (very cold: let the pump decide)
+max_sensor_age = 900                # seconds; older guard readings count as stale and suspend disable
+hysteresis = 1.0                    # °C above the limit before a tripped guard clears
+
+[debug_website]                     # normally off; `run --debug-website [HOST:]PORT` also enables it
+enabled = false
+host = "127.0.0.1"                  # NO authentication: 0.0.0.0 exposes a control page to the whole LAN
+port = 0                            # 0 = pick a free port (the URL is logged at startup)
+feeds_watchdog = false              # true: commands from the page count as a Home Assistant heartbeat
+
+[log]
+level = "info"                      # debug | info | warning | error | critical (debug includes raw console traffic)

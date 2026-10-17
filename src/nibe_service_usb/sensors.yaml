@@ -1,0 +1,1009 @@
+# Sensor and alarm definitions for nibe-service-usb.
+#
+# Top level: `sensors:` (list) and `alarms:` (list). Order matters: the poller
+# groups registers into RI lines in this order. Sensor `name` is the wire
+# identifier and is never renamed once released. See docs/sensors-and-polling.md
+# and docs/sensor-selection.md.
+#
+# Fields: name label register rt_field ram type scale unit kind precision
+# options tier enabled device_class state_class description.
+#   type: s8 u8 s16 u16 s32 u32 | ram_timer_running | ram_timer_seconds | ram_s32
+#   kind: temperature number enum binary duration alarm_list
+#   tier: core settings identity diagnostic
+
+sensors:
+  # ----------------------------------------------------------------------
+  # CORE: temperatures (one `RT 1` line, field N = BT N; register is the RI fallback)
+
+  - name: bt1_outdoor
+    label: "Outdoor temperature (BT1)"
+    register: 40004
+    rt_field: 1
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt2_flow
+    label: "Flow temperature (BT2)"
+    register: 40008
+    rt_field: 2
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Control flow on this unit (no BT25)"
+
+  - name: bt3_return
+    label: "Return temperature (BT3)"
+    register: 40012
+    rt_field: 3
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Compressor limit sensor (alarm 163 at 56 C or more)"
+
+  - name: bt6_hw_charge
+    label: "Hot water charge (BT6)"
+    register: 40014
+    rt_field: 6
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Hot water control sensor"
+
+  - name: bt7_hw_top
+    label: "Hot water top (BT7)"
+    register: 40013
+    rt_field: 7
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt10_brine_in
+    label: "Brine in (BT10)"
+    register: 40015
+    rt_field: 10
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt11_brine_out
+    label: "Brine out (BT11)"
+    register: 40016
+    rt_field: 11
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt12_cond_out
+    label: "Condenser out (BT12)"
+    register: 40017
+    rt_field: 12
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Alarm 162 above 63 C"
+
+  - name: bt14_hot_gas
+    label: "Hot gas (BT14)"
+    register: 40018
+    rt_field: 14
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Alarm 155 above 135 C"
+
+  - name: bt15_liquid
+    label: "Liquid line (BT15)"
+    register: 40019
+    rt_field: 15
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt17_suction
+    label: "Suction gas (BT17)"
+    register: 40022
+    rt_field: 17
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+
+  - name: bt25_ext_flow
+    label: "External flow (BT25)"
+    register: 40071
+    rt_field: 25
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    enabled: false
+    device_class: temperature
+    state_class: measurement
+    description: "Not fitted on this unit"
+
+  - name: bt50_room
+    label: "Room temperature (BT50)"
+    register: 40033
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    enabled: false
+    device_class: temperature
+    state_class: measurement
+    description: "Not fitted on this unit; not part of the RT 1 line (RI only)"
+
+  - name: avg_outdoor
+    label: "Average outdoor temperature"
+    register: 40067
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Decides heating on/off against set_stop_heating"
+
+  - name: calc_flow
+    label: "Calculated flow temperature"
+    register: 43009
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: core
+    device_class: temperature
+    state_class: measurement
+    description: "Heating curve output; degree minutes integrate bt2_flow minus calc_flow"
+
+  # ----------------------------------------------------------------------
+  # CORE: control state (RI lines, in this order)
+
+  - name: degree_minutes
+    label: "Degree minutes"
+    register: 40940
+    type: s32
+    scale: 0.1
+    unit: "DM"
+    kind: number
+    precision: 1
+    tier: core
+    state_class: measurement
+    description: "Published in displayed DM (raw / 10); the heating controller works in raw units"
+
+  - name: op_priority
+    label: "Operating priority"
+    register: 43086
+    type: s16
+    kind: enum
+    options: {10: "off", 20: "hot_water", 30: "heating"}
+    tier: core
+    device_class: enum
+
+  - name: heat_demand
+    label: "Heat demand"
+    register: 43110
+    type: u8
+    kind: binary
+    tier: core
+    description: "0 makes the pump reset degree minutes to 0; the heating controller must not fight this"
+
+  - name: compressor_fsm
+    label: "Compressor state machine"
+    register: 43427
+    type: s16
+    kind: enum
+    options: {20: "idle", 40: "starting", 60: "running", 100: "stopping"}
+    tier: core
+    device_class: enum
+
+  - name: compressor_running
+    label: "Compressor running"
+    register: 43435
+    type: u8
+    kind: binary
+    tier: core
+    device_class: running
+    description: "Relay command"
+
+  - name: compressor_status
+    label: "Compressor status"
+    register: 43443
+    type: s16
+    kind: enum
+    options: {5: "stopped", 6: "running", 7: "soft_start"}
+    tier: core
+    device_class: enum
+    description: "Other values are fault codes and decode to unknown_<code>"
+
+  - name: compressor_inhibit
+    label: "Compressor inhibit time"
+    register: 43405
+    type: u8
+    unit: "min"
+    kind: duration
+    tier: core
+    device_class: duration
+    state_class: measurement
+    description: "Explains 'wanted but not running'"
+
+  - name: gp1_speed
+    label: "Heat medium pump speed (GP1)"
+    register: 43437
+    type: u8
+    unit: "%"
+    kind: number
+    tier: core
+    state_class: measurement
+
+  - name: gp2_speed
+    label: "Brine pump speed (GP2)"
+    register: 43439
+    type: u8
+    unit: "%"
+    kind: number
+    tier: core
+    state_class: measurement
+
+  - name: qn10_hot_water
+    label: "Valve in hot water position (QN10)"
+    register: 43481
+    type: u8
+    kind: binary
+    tier: core
+
+  - name: hw_mode
+    label: "Hot water mode (effective)"
+    register: 43109
+    type: s16
+    kind: enum
+    options: {-1: "off", 0: "eco", 1: "normal", 2: "lux", 3: "periodic"}
+    tier: core
+    device_class: enum
+
+  - name: hw_comfort
+    label: "Hot water comfort"
+    register: 47041
+    type: s8
+    kind: enum
+    options: {0: "eco", 1: "normal", 2: "lux"}
+    tier: core
+    device_class: enum
+    description: "The value the set_hot_water_mode command changes"
+
+  - name: hw_reason
+    label: "Hot water mode reason"
+    register: 40313
+    type: s16
+    kind: enum
+    options: {0: "comfort"}
+    tier: core
+    device_class: enum
+    description: "Why hw_mode is what it is; codes 1..12 are not named yet and decode to unknown_<code>"
+
+  - name: tl_selection
+    label: "Temporary lux"
+    register: 48132
+    type: s16
+    kind: enum
+    options: {0: "off", 1: "3h", 2: "6h", 3: "12h", 4: "one_time"}
+    tier: core
+    device_class: enum
+
+  - name: el_power_kw
+    label: "Electric addition power"
+    register: 43084
+    type: s16
+    scale: 0.01
+    unit: "kW"
+    kind: number
+    precision: 2
+    tier: core
+    device_class: power
+    state_class: measurement
+    description: "Nominal electrical addition"
+
+  - name: el_step_actual
+    label: "Electric addition step"
+    register: 43091
+    type: u8
+    kind: number
+    tier: core
+    state_class: measurement
+
+  - name: frost_mode
+    label: "Freeze protection active"
+    register: 43013
+    type: u8
+    kind: binary
+    tier: core
+    description: "Info 180"
+
+  - name: any_alarm
+    label: "Alarm"
+    register: 43012
+    type: u8
+    kind: binary
+    tier: core
+    device_class: problem
+    description: "General (red) alarm"
+
+  - name: pi_failure
+    label: "Periodic increase failed"
+    register: 45111
+    type: u8
+    kind: binary
+    tier: core
+    device_class: problem
+    description: "Info 181"
+
+  - name: pi_running
+    label: "Periodic increase running"
+    ram: [0x2066718C, 3]
+    type: ram_timer_running
+    kind: binary
+    tier: core
+    device_class: running
+    description: "RM of the run timer is non-zero; polled every 60 s"
+
+  - name: pi_remaining
+    label: "Periodic increase remaining"
+    ram: [0x2066718C, 3]
+    type: ram_timer_seconds
+    unit: "s"
+    kind: duration
+    tier: core
+    device_class: duration
+    state_class: measurement
+    description: "Time the run can still last"
+
+  - name: pi_hold
+    label: "Periodic increase hold phase"
+    register: 43014
+    type: u8
+    kind: binary
+    tier: core
+    description: "Target reached, 1 h hold phase; also 1 when idle, only meaningful while pi_running"
+
+  - name: pi_enabled
+    label: "Periodic increase enabled"
+    register: 47050
+    type: u8
+    kind: binary
+    tier: core
+    description: "Enable bit; the trigger toggles it"
+
+  - name: active_alarms
+    label: "Active alarms"
+    type: u8
+    kind: alarm_list
+    tier: core
+    description: "Derived from the alarm flag registers in the alarms section; value is a list of {number, title}"
+
+  # ----------------------------------------------------------------------
+  # CORE: counters
+
+  - name: comp_starts
+    label: "Compressor starts"
+    register: 43416
+    type: u32
+    kind: number
+    tier: core
+    state_class: total_increasing
+
+  - name: comp_hours
+    label: "Compressor hours"
+    register: 43420
+    type: u32
+    unit: "h"
+    kind: duration
+    tier: core
+    device_class: duration
+    state_class: total_increasing
+
+  - name: comp_hours_hw
+    label: "Compressor hours, hot water"
+    register: 43424
+    type: u32
+    unit: "h"
+    kind: duration
+    tier: core
+    device_class: duration
+    state_class: total_increasing
+
+  # ----------------------------------------------------------------------
+  # SETTINGS (hourly, and at every health check)
+
+  - name: set_start_comp
+    label: "Start compressor (setting)"
+    register: 47206
+    type: s16
+    unit: "DM"
+    kind: number
+    tier: settings
+    description: "Used by the heating controller: raw threshold = value x 10, enable target = value x 10 + 1"
+
+  - name: set_stop_heating
+    label: "Stop heating (setting)"
+    register: 47375
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_stop_addheat
+    label: "Stop additional heat (setting)"
+    register: 47376
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_op_mode
+    label: "Operating mode (setting)"
+    register: 47137
+    type: s16
+    kind: enum
+    options: {0: "auto", 1: "manual", 2: "add_heat_only"}
+    tier: settings
+    device_class: enum
+    description: "add_heat_only blocks the compressor; an enable request is pointless then"
+
+  - name: set_el_max
+    label: "Max electric addition (setting)"
+    register: 47212
+    type: s16
+    scale: 0.01
+    unit: "kW"
+    kind: number
+    precision: 2
+    tier: settings
+    device_class: power
+
+  - name: set_curve
+    label: "Heating curve (setting)"
+    register: 47007
+    type: s16
+    kind: number
+    tier: settings
+
+  - name: set_curve_offset
+    label: "Curve offset (setting)"
+    register: 47011
+    type: s16
+    kind: number
+    tier: settings
+
+  - name: set_min_flow
+    label: "Min flow temperature (setting)"
+    register: 47015
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_max_flow
+    label: "Max flow temperature (setting)"
+    register: 47019
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_start_eco
+    label: "Hot water start, eco (setting)"
+    register: 47045
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_start_normal
+    label: "Hot water start, normal (setting)"
+    register: 47044
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_start_lux
+    label: "Hot water start, lux (setting)"
+    register: 47043
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_stop_eco
+    label: "Hot water stop, eco (setting)"
+    register: 47049
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_stop_normal
+    label: "Hot water stop, normal (setting)"
+    register: 47048
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_hw_stop_lux
+    label: "Hot water stop, lux (setting)"
+    register: 47047
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: pi_period
+    label: "Periodic increase period (setting)"
+    register: 47051
+    type: s16
+    unit: "d"
+    kind: number
+    tier: settings
+
+  - name: pi_stop_temp
+    label: "Periodic increase stop temperature (setting)"
+    register: 47046
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: settings
+    device_class: temperature
+
+  - name: set_filter_time
+    label: "Filter time (setting)"
+    register: 47377
+    type: s16
+    unit: "h"
+    kind: number
+    tier: settings
+
+  # ----------------------------------------------------------------------
+  # IDENTITY read from registers (startup, reconnect, daily; uptime also with every core poll)
+
+  - name: uptime
+    label: "Uptime"
+    register: 43071
+    type: u32
+    unit: "s"
+    kind: duration
+    tier: identity
+    device_class: duration
+    description: "Seconds since boot; a decrease means the display restarted"
+
+  - name: eeprom_store_calls
+    label: "EEPROM store calls"
+    register: 40969
+    type: u32
+    kind: number
+    tier: identity
+    state_class: total_increasing
+    description: "Calls to the value-store function (1-4 bytes each)"
+
+  - name: eeprom_write_failures
+    label: "EEPROM write failures"
+    register: 40965
+    type: u32
+    kind: number
+    tier: identity
+    state_class: total_increasing
+
+  - name: eeprom_write_failures_boot
+    label: "EEPROM write failures since boot"
+    register: 40967
+    type: u32
+    kind: number
+    tier: identity
+
+  - name: country
+    label: "Country"
+    register: 48745
+    type: s16
+    kind: number
+    tier: identity
+
+  - name: base_version
+    label: "PCA base version"
+    register: 32041
+    type: s16
+    kind: number
+    tier: identity
+    description: "Cross-check for the RV reply"
+
+  # ----------------------------------------------------------------------
+  # DIAGNOSTIC (opt-in: poll.diagnostic = true)
+
+  - name: comp_perm
+    label: "Compressor permitted"
+    register: 43112
+    type: u8
+    kind: binary
+    tier: diagnostic
+
+  - name: add_perm
+    label: "Additional heat permitted"
+    register: 43113
+    type: u8
+    kind: binary
+    tier: diagnostic
+
+  - name: hw_addheat_state
+    label: "Hot water additional heat state"
+    register: 31003
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: prio_seconds
+    label: "Priority time"
+    register: 43026
+    type: u16
+    unit: "s"
+    kind: duration
+    tier: diagnostic
+    device_class: duration
+
+  - name: compressor_reason
+    label: "Compressor reason"
+    register: 43102
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: compressor_prerun
+    label: "Compressor pre-run"
+    register: 43409
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: relays_pca_base
+    label: "Relays PCA Base"
+    register: 43514
+    type: u16
+    kind: number
+    tier: diagnostic
+    description: "Bit field"
+
+  - name: relays_aa1
+    label: "Relays AA1"
+    register: 43516
+    type: u16
+    kind: number
+    tier: diagnostic
+    description: "Bit field"
+
+  - name: relays_flags
+    label: "Relay flags"
+    register: 43518
+    type: u16
+    kind: number
+    tier: diagnostic
+    description: "Bit field"
+
+  - name: el_step_target
+    label: "Electric addition step target"
+    register: 43200
+    type: u8
+    kind: number
+    tier: diagnostic
+
+  - name: alarm_log_index
+    label: "Alarm log index"
+    register: 45119
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: pca_status_byte
+    label: "PCA status byte"
+    register: 32040
+    type: u8
+    kind: number
+    tier: diagnostic
+
+  - name: control_flow
+    label: "Control flow temperature"
+    register: 41788
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: diagnostic
+    device_class: temperature
+    state_class: measurement
+
+  - name: curve_outdoor
+    label: "Heating curve outdoor temperature"
+    register: 40185
+    type: s16
+    scale: 0.1
+    unit: "°C"
+    kind: temperature
+    precision: 1
+    tier: diagnostic
+    device_class: temperature
+    state_class: measurement
+
+  - name: req_hw_comp
+    label: "Requested: hot water compressor"
+    register: 43201
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: req_heat_comp
+    label: "Requested: heating compressor"
+    register: 43203
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: req_heat_el
+    label: "Requested: heating electric"
+    register: 43204
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: aux1_selector
+    label: "AUX 1 function selector"
+    register: 47411
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: aux2_selector
+    label: "AUX 2 function selector"
+    register: 47410
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: aux1_raw
+    label: "AUX 1 raw input"
+    register: 32004
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: aux2_raw
+    label: "AUX 2 raw input"
+    register: 32005
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43151
+    label: "Block flag 43151"
+    register: 43151
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_40814
+    label: "Block flag 40814"
+    register: 40814
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43150
+    label: "Block flag 43150"
+    register: 43150
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43523
+    label: "Block flag 43523"
+    register: 43523
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43153
+    label: "Block flag 43153"
+    register: 43153
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43161
+    label: "Block flag 43161"
+    register: 43161
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: block_flag_43483
+    label: "Block flag 43483"
+    register: 43483
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: sg_ready
+    label: "SG Ready"
+    register: 44874
+    type: s16
+    kind: number
+    tier: diagnostic
+
+  - name: hp_input
+    label: "High pressure switch input"
+    register: 40052
+    type: u8
+    kind: binary
+    tier: diagnostic
+
+  - name: lp_input
+    label: "Low pressure switch input"
+    register: 40053
+    type: u8
+    kind: binary
+    tier: diagnostic
+
+  - name: tb_input
+    label: "Thermal breaker input"
+    register: 40054
+    type: u8
+    kind: binary
+    tier: diagnostic
+
+# Alarm flag registers (0 = inactive, non-zero = active), 6 RI lines of 9.
+# number = alarm/info number in the F1226 alarm table. Folded into `active_alarms`.
+alarms:
+  - {number: 1, register: 45005, title: "Sensor fault BT1"}
+  - {number: 2, register: 45006, title: "Sensor fault BT2"}
+  - {number: 3, register: 45208, title: "Sensor fault BT3"}
+  - {number: 6, register: 45011, title: "Sensor fault BT6"}
+  - {number: 10, register: 45204, title: "Sensor fault BT10"}
+  - {number: 11, register: 45202, title: "Sensor fault BT11"}
+  - {number: 12, register: 45206, title: "Sensor fault BT12"}
+  - {number: 14, register: 45210, title: "Sensor fault BT14"}
+  - {number: 25, register: 45051, title: "Sensor error BT25"}
+  - {number: 40, register: 45217, title: "Compressor phase 1 missing"}
+  - {number: 41, register: 45219, title: "Compressor phase 2 missing"}
+  - {number: 42, register: 45221, title: "Compressor phase 3 missing"}
+  - {number: 43, register: 45215, title: "Incorrect phase sequence"}
+  - {number: 44, register: 45225, title: "Overheating soft start"}
+  - {number: 45, register: 45223, title: "Phase fault"}
+  - {number: 50, register: 45196, title: "High pressure alarm"}
+  - {number: 51, register: 45198, title: "Low pressure alarm"}
+  - {number: 52, register: 45025, title: "Temperature limiter alarm"}
+  - {number: 53, register: 45045, title: "Level sensor brine"}
+  - {number: 54, register: 45200, title: "Motor protection alarm"}
+  - {number: 55, register: 45227, title: "Hot gas alarm"}
+  - {number: 56, register: 45113, title: "Erroneous serial no"}
+  - {number: 57, register: 45114, title: "Erroneous software"}
+  - {number: 58, register: 40833, title: "Pressure switch alarm"}
+  - {number: 60, register: 45235, title: "Low temperature outgoing brine"}
+  - {number: 68, register: 40841, title: "Pressure switch alarm (stage 2)"}
+  - {number: 71, register: 45028, title: "Communication fault PCA Base"}
+  - {number: 72, register: 45337, title: "Communication fault PCA Motor Controller"}
+  - {number: 107, register: 45100, title: "Sensor fault BT7"}
+  - {number: 140, register: 45263, title: "Compressor phase 1 missing (info)"}
+  - {number: 141, register: 45265, title: "Compressor phase 2 missing (info)"}
+  - {number: 142, register: 45267, title: "Compressor phase 3 missing (info)"}
+  - {number: 145, register: 45269, title: "Phase fault (info)"}
+  - {number: 150, register: 45261, title: "High pressure alarm (info)"}
+  - {number: 155, register: 45317, title: "Hot gas alarm (info)"}
+  - {number: 160, register: 45271, title: "Low temperature outgoing brine (info)"}
+  - {number: 161, register: 45273, title: "High temperature brine in"}
+  - {number: 162, register: 45293, title: "High condenser out temperature"}
+  - {number: 163, register: 45295, title: "High condenser in temperature"}
+  - {number: 171, register: 45076, title: "Communication fault PCA Base (info)"}
+  - {number: 172, register: 45341, title: "Communication fault PCA Motor Controller (info)"}
+  - {number: 175, register: 45277, title: "Soft start card starting"}
+  - {number: 180, register: 43013, title: "Freeze protection active"}
+  - {number: 181, register: 45111, title: "Problems at periodic increasing"}
+  - {number: 182, register: 45112, title: "Load monitor active"}
+  - {number: 184, register: 45110, title: "Filter alarm"}
+  - {number: 900, register: 40774, title: "Country not selected"}
+  - {number: 991, register: 40855, title: "Blocked"}
+  - {number: 995, register: 45364, title: "External alarm"}
+  - {number: 996, register: 45361, title: "Blocked (add. heat)"}
+  - {number: 997, register: 45360, title: "Blocked (compressor)"}
+  - {number: 998, register: 44261, title: "Starts"}
+  - {number: 999, register: 43236, title: "Unnamed"}

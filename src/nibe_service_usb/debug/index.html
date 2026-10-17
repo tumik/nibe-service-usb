@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Nibe service debug</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #f3f5f8; --card: #ffffff; --fg: #17202b; --muted: #667385; --border: #dde3ea;
+  --accent: #1f6feb; --accent-fg: #ffffff; --soft: #eef2f7; --soft-hover: #e2e9f1;
+  --ok: #1a7f37; --ok-bg: #dcf5e3; --warn: #9a6700; --warn-bg: #fff1c9; --bad: #cf222e; --bad-bg: #ffe1e3;
+  --flash: #ffe38a; --shadow: 0 1px 2px rgba(20, 30, 45, .06), 0 2px 8px rgba(20, 30, 45, .05);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1319; --card: #171d25; --fg: #e6ebf1; --muted: #8b98a8; --border: #28313c;
+    --accent: #4c9aff; --accent-fg: #07101c; --soft: #212a35; --soft-hover: #2b3643;
+    --ok: #4ac26b; --ok-bg: #12301d; --warn: #e3b341; --warn-bg: #3a2e0c; --bad: #ff7b72; --bad-bg: #3d1618;
+    --flash: #6b5300; --shadow: none;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 12px 16px 48px; }
+header.top {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 0 14px;
+}
+header.top h1 { font-size: 1.25rem; margin: 0; line-height: 1.2; }
+header.top .ver { color: var(--muted); font-size: .85rem; }
+header.top .title { flex: 1 1 220px; min-width: 0; }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  font-size: .8rem; font-weight: 600; background: var(--soft); color: var(--muted); white-space: nowrap;
+}
+.badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.badge.ok { background: var(--ok-bg); color: var(--ok); }
+.badge.warn { background: var(--warn-bg); color: var(--warn); }
+.badge.bad { background: var(--bad-bg); color: var(--bad); }
+.badge.plain::before { display: none; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 14px 16px; margin-bottom: 14px;
+}
+.card > h2 { font-size: 1rem; margin: 0 0 12px; display: flex; align-items: center; gap: 10px; }
+.card > h2 .spacer { flex: 1; }
+.card > h2 input { font-weight: 400; }
+.muted { color: var(--muted); }
+.small { font-size: .8rem; }
+button {
+  font: inherit; color: var(--fg); background: var(--soft); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px; min-height: 40px; cursor: pointer; position: relative;
+}
+button:hover:not(:disabled) { background: var(--soft-hover); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .55; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+button.pending { color: transparent !important; }
+button.pending::after {
+  content: ""; position: absolute; inset: 0; margin: auto; width: 16px; height: 16px;
+  border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite;
+}
+button.primary.pending::after { border-color: var(--accent-fg); border-top-color: transparent; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px 24px; }
+.ctl h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--soft); }
+.seg button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 8px 6px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.seg button.on.pending::after { border-color: var(--accent-fg); border-top-color: transparent; }
+.ctl .info { margin-top: 8px; font-size: .85rem; color: var(--muted); }
+.ctl .info b { color: var(--fg); font-weight: 600; }
+.ctl .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--soft); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.tile .lbl { font-size: .75rem; color: var(--muted); }
+.tile .val { font-size: 1.45rem; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile .val .unit { font-size: .8rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
+.tile .sub { font-size: .75rem; color: var(--muted); }
+.tile.bad { background: var(--bad-bg); }
+.tile.bad .val { color: var(--bad); }
+.tile.wide { grid-column: span 2; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); margin-right: 8px; vertical-align: 1px; }
+.dot.ok { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-bg); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--bad); }
+.alarms { margin: 4px 0 0; padding: 0; list-style: none; font-size: .8rem; color: var(--fg); }
+input[type=search] {
+  font: inherit; color: var(--fg); background: var(--soft); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px; min-width: 0; width: min(260px, 100%);
+}
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: baseline; }
+thead th { font-size: .75rem; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--card); }
+tr.grp th { background: var(--soft); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+td.v { font-weight: 600; text-align: right; white-space: nowrap; }
+th.r { text-align: right; }
+td.u, td.a { color: var(--muted); white-space: nowrap; }
+td.k { color: var(--muted); font: .75rem var(--mono); }
+.age-inline { display: none; color: var(--muted); font-size: .72rem; font-weight: 400; text-align: right; }
+.pi-run { color: var(--ok); font-weight: 600; }
+.k-inline { display: none; color: var(--muted); font: .72rem var(--mono); }
+td.v.flash { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+tr.hidden { display: none; }
+.empty { padding: 10px 8px; color: var(--muted); }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px 24px; }
+.status-grid h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; }
+dl { margin: 0; display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 3px 12px; font-size: .88rem; }
+dt { color: var(--muted); }
+dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+dd.yes { color: var(--ok); font-weight: 600; }
+dd.no { color: var(--muted); }
+dd.bad { color: var(--bad); font-weight: 600; }
+details summary { cursor: pointer; font-weight: 600; }
+pre {
+  background: var(--soft); border-radius: 8px; padding: 10px; overflow: auto; max-height: 360px;
+  font: .75rem/1.4 var(--mono); margin: 8px 0 0;
+}
+#toasts {
+  position: fixed; left: 0; right: 0; bottom: 14px; display: flex; flex-direction: column; align-items: center;
+  gap: 8px; pointer-events: none; padding: 0 12px; z-index: 10;
+}
+.toast {
+  pointer-events: auto; max-width: min(560px, 100%); background: var(--fg); color: var(--bg);
+  padding: 10px 14px; border-radius: 10px; box-shadow: 0 4px 18px rgba(0, 0, 0, .3); font-size: .9rem;
+  animation: pop .18s ease-out;
+}
+.toast.err { background: var(--bad); color: #fff; }
+.toast.ok { background: var(--ok); color: #fff; }
+@keyframes pop { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 640px) {
+  .wrap { padding: 8px 12px 40px; }
+  .card { padding: 12px; }
+  th.kc, td.k { display: none; }
+  .k-inline { display: block; }
+  .tile.wide { grid-column: span 2; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tile .val { font-size: 1.25rem; }
+}
+@media (max-width: 480px) {
+  th.ac, td.a { display: none; }
+  .age-inline { display: block; }
+  .card > h2 { flex-wrap: wrap; }
+  .card > h2 .spacer { display: none; }
+  .card > h2 input { flex: 1 1 100%; width: 100%; }
+  th, td { padding: 5px 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  td.v.flash, .toast, button.pending::after { animation: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="title">
+      <h1 id="product">Nibe heat pump</h1>
+      <div class="ver" id="version">&nbsp;</div>
+    </div>
+    <div class="badges" id="badges">
+      <span class="badge" id="b-pump">pump ?</span>
+      <span class="badge" id="b-ha">HA ?</span>
+      <span class="badge plain" id="b-up" title="Server uptime">up —</span>
+      <span class="badge warn" id="b-conn">connecting</span>
+    </div>
+  </header>
+
+  <section class="card" id="controls">
+    <h2>Controls</h2>
+    <div class="controls">
+      <div class="ctl" id="c-hw">
+        <h3>Hot water comfort</h3>
+        <div class="seg" role="radiogroup" aria-label="Hot water comfort"></div>
+        <div class="info" id="c-hw-info"></div>
+      </div>
+      <div class="ctl" id="c-heat">
+        <h3>Heating request</h3>
+        <div class="seg" role="radiogroup" aria-label="Heating request"></div>
+        <div class="info" id="c-heat-info"></div>
+      </div>
+      <div class="ctl" id="c-pi">
+        <h3>Periodic hot water increase</h3>
+        <div class="row">
+          <button class="primary" id="btn-boost" type="button">Start now</button>
+          <span id="c-pi-state"></span>
+        </div>
+        <div class="info" id="c-pi-info"></div>
+      </div>
+      <div class="ctl" id="c-refresh">
+        <h3>Sensors</h3>
+        <div class="row">
+          <button id="btn-refresh" type="button">Refresh sensors</button>
+          <span class="muted small">asks the pump for fresh values (once a minute at most)</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="overview">
+    <h2>Overview</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="card" id="sensors">
+    <h2>All sensors <span class="muted small" id="s-count"></span><span class="spacer"></span>
+      <input type="search" id="filter" placeholder="Filter sensors" aria-label="Filter sensors" autocomplete="off"></h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Sensor</th><th class="r">Value</th><th>Unit</th><th class="ac">Age</th><th class="kc">Key</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="no-match" hidden>No sensor matches the filter.</div>
+  </section>
+
+  <section class="card" id="status">
+    <h2>Status</h2>
+    <div class="status-grid" id="status-grid"></div>
+  </section>
+
+  <section class="card">
+    <details id="details">
+      <summary>Raw JSON (last status and last event)</summary>
+      <pre id="raw-status"></pre>
+      <pre id="raw-event"></pre>
+    </details>
+  </section>
+</div>
+<div id="toasts" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+(() => {
+const $ = (sel, root = document) => root.querySelector(sel);
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v);
+  }
+  for (const kid of kids) if (kid != null) e.append(kid);
+  return e;
+}
+
+// ------------------------------------------------------------------ model
+const M = {
+  status: null,          // last get_status shaped object
+  statusAt: 0,           // Date.now() when status was received
+  sensors: {},           // key -> {value, ts, name, kind, unit, precision, tier, options, description}
+  skew: 0,               // server time minus browser time, seconds
+  conn: "connecting",
+  shutdown: null,
+  lastEvent: null,
+};
+const TIERS = ["core", "settings", "identity", "diagnostic"];
+const HW_MODES = ["eco", "normal", "lux"];
+const HEAT_MODES = ["auto", "enable", "disable"];
+const TS_KEYS = new Set(["last_ok", "last_push", "next_push", "last_restart", "last_health_check", "last_heartbeat", "reverted_at"]);
+
+const nowSrv = () => Date.now() / 1000 + M.skew;
+const sensor = (k) => M.sensors[k];
+const sval = (k) => (M.sensors[k] ? M.sensors[k].value : null);
+
+// ------------------------------------------------------------------ formatting
+function fmtHMS(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+function fmtUptime(sec) {
+  if (sec == null) return "—";
+  sec = Math.max(0, Math.floor(sec));
+  const d = Math.floor(sec / 86400), r = sec % 86400;
+  const hh = String(Math.floor(r / 3600)).padStart(2, "0");
+  const mm = String(Math.floor((r % 3600) / 60)).padStart(2, "0");
+  const ss = String(r % 60).padStart(2, "0");
+  return `${d}d ${hh}:${mm}:${ss}`;
+}
+function fmtAge(sec) {
+  if (sec == null) return "—";
+  if (sec < 0) sec = 0;
+  if (sec < 60) return `${Math.floor(sec)} s`;
+  if (sec < 3600) return `${Math.floor(sec / 60)} min`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)} h`;
+  return `${Math.floor(sec / 86400)} d`;
+}
+function fmtRel(sec) {
+  const a = fmtAge(Math.abs(sec));
+  return sec >= 0 ? `in ${a}` : `${a} ago`;
+}
+function fmtTime(ts) {
+  if (ts == null) return "—";
+  const d = new Date(ts * 1000);
+  const same = d.toDateString() === new Date().toDateString();
+  return same ? d.toLocaleTimeString() : d.toLocaleString();
+}
+function fmtNum(v, precision) {
+  if (typeof v !== "number") return String(v);
+  return precision != null ? v.toFixed(precision) : String(v);
+}
+// Remaining seconds of the periodic increase, counted down between updates.
+function piRemaining() {
+  const s = sensor("pi_remaining");
+  const running = sval("pi_running") ?? (M.status && M.status.hot_water.periodic_increase.running);
+  if (s && s.value != null) {
+    return running && s.ts != null ? Math.max(0, s.value - (nowSrv() - s.ts)) : s.value;
+  }
+  const st = M.status && M.status.hot_water.periodic_increase;
+  if (!st) return null;
+  return running ? Math.max(0, st.remaining_seconds - (Date.now() - M.statusAt) / 1000) : st.remaining_seconds;
+}
+// -> {text, unit} for a sensor object; text "—" for null.
+function fmtSensor(key, s) {
+  if (!s || s.value == null) return { text: "—", unit: "" };
+  const v = s.value, unit = s.unit || "";
+  switch (s.kind) {
+    case "binary": return { text: v ? "on" : "off", unit: "" };
+    case "alarm_list": return { text: Array.isArray(v) ? (v.length ? v.length + " active" : "none") : String(v), unit: "" };
+    case "duration":
+      if (key === "pi_remaining") return { text: fmtHMS(piRemaining() ?? v), unit: "" };
+      if (unit === "s") return { text: fmtHMS(v), unit: "" };
+      return { text: fmtNum(v, s.precision), unit };
+    default: return { text: fmtNum(v, s.precision), unit };
+  }
+}
+
+// ------------------------------------------------------------------ rendering (batched)
+const dirty = new Set();
+let raf = 0;
+function mark(...parts) {
+  parts.forEach((p) => dirty.add(p));
+  if (!raf) raf = requestAnimationFrame(flush);
+}
+function flush() {
+  raf = 0;
+  const parts = [...dirty];
+  dirty.clear();
+  for (const p of parts) {
+    try { RENDER[p](); } catch (e) { console.error("render", p, e); }
+  }
+}
+
+// ---- header
+function setBadge(id, cls, text, title) {
+  const b = $("#" + id);
+  b.className = "badge " + cls;
+  b.textContent = text;
+  b.title = title || "";
+}
+function renderHeader() {
+  const st = M.status;
+  if (st) {
+    $("#product").textContent = st.identity.product || "Nibe heat pump";
+    $("#version").textContent = [
+      st.identity.software_version ? "software " + st.identity.software_version : null,
+      st.version ? "service " + st.version : null,
+    ].filter(Boolean).join(" · ") || " ";
+    const p = st.pump;
+    setBadge("b-pump", p.online ? "ok" : "bad", p.online ? "pump online" : "pump offline",
+      (p.port || "") + (p.errors ? ` · ${p.errors} errors` : ""));
+    const w = st.watchdog;
+    setBadge("b-ha", w.ha_alive ? "ok" : "warn", w.ha_alive ? "HA alive" : "HA silent",
+      `watchdog timeout ${w.timeout} s, last heartbeat ${fmtTime(w.last_heartbeat)}` +
+      (w.reverted_at ? `, reverted ${fmtTime(w.reverted_at)}` : ""));
+    setBadge("b-up", "plain", "up " + fmtUptime(st.uptime + (Date.now() - M.statusAt) / 1000), "Server uptime");
+  }
+  const labels = { live: ["ok", "live"], connecting: ["warn", "connecting"], reconnecting: ["bad", "reconnecting"], stopping: ["bad", "server stopping"] };
+  const [cls, txt] = labels[M.conn] || ["warn", M.conn];
+  setBadge("b-conn", cls, txt, M.shutdown ? "shutdown: " + M.shutdown : "");
+}
+
+// ---- controls (DOM built once, updated in place)
+const segButtons = { hw: {}, heat: {} };
+function buildControls() {
+  for (const [grp, modes, cmd] of [["hw", HW_MODES, "set_hot_water_mode"], ["heat", HEAT_MODES, "set_heating_request"]]) {
+    const box = $(grp === "hw" ? "#c-hw .seg" : "#c-heat .seg");
+    for (const m of modes) {
+      const b = el("button", { type: "button", role: "radio", "aria-checked": "false", text: m });
+      b.addEventListener("click", () => send(cmd, { mode: m }, b, box));
+      box.append(b);
+      segButtons[grp][m] = b;
+    }
+  }
+  $("#btn-boost").addEventListener("click", (e) => send("trigger_hot_water_boost", {}, e.currentTarget));
+  $("#btn-refresh").addEventListener("click", (e) => send("refresh", {}, e.currentTarget));
+}
+function setSeg(grp, current) {
+  for (const [m, b] of Object.entries(segButtons[grp])) {
+    const on = m === current;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-checked", on ? "true" : "false");
+  }
+}
+function infoLine(target, parts) {
+  target.replaceChildren();
+  parts.forEach(([k, v], i) => {
+    if (i) target.append(" · ");
+    target.append(k + " ", el("b", { text: v }));
+  });
+}
+function renderControls() {
+  const st = M.status;
+  const hwCur = sval("hw_comfort") ?? (st && st.hot_water.mode);
+  setSeg("hw", hwCur);
+  if (st) {
+    const h = st.hot_water;
+    infoLine($("#c-hw-info"), [["effective", h.effective_mode ?? "—"], ["reason", h.reason ?? "—"]]);
+    const he = st.heating;
+    setSeg("heat", he.mode);
+    infoLine($("#c-heat-info"), [
+      ["active", he.active ? "yes" : "no"],
+      ["suspended", he.suspended_reason ?? "—"],
+      ["target DM", he.target_dm ?? "—"],
+      ["current DM", he.current_dm ?? "—"],
+      ["last push", he.last_push ? fmtTime(he.last_push) : "—"],
+      ["next push", he.next_push ? `${fmtTime(he.next_push)} (${fmtRel(he.next_push - nowSrv())})` : "—"],
+    ]);
+  }
+  // periodic increase
+  const pi = st && st.hot_water.periodic_increase;
+  const running = sval("pi_running") ?? (pi ? pi.running : null);
+  const hold = sval("pi_hold") ?? (pi ? pi.hold : null);
+  const enabled = sval("pi_enabled") ?? (pi ? pi.enabled : null);
+  const rem = piRemaining();
+  const stateEl = $("#c-pi-state");
+  stateEl.replaceChildren();
+  if (running == null) stateEl.append(el("span", { class: "muted", text: "unknown" }));
+  else if (running) {
+    const parts = ["running"];
+    if (rem != null) parts.push(`${fmtHMS(rem)} left`);
+    if (hold) parts.push("hold phase");
+    stateEl.append(el("span", { class: "pi-run" }, el("span", { class: "dot ok" }), parts.join(" · ")));
+  } else stateEl.append(el("span", { class: "dot" }), "idle");
+  infoLine($("#c-pi-info"), [["enabled on pump", enabled == null ? "—" : enabled ? "yes" : "no"]]);
+  const boost = $("#btn-boost");
+  if (!boost.classList.contains("pending")) boost.disabled = !!running;
+  boost.title = running ? "Already running" : "Toggle the enable bit so a periodic increase starts now";
+}
+
+// ---- overview tiles
+const TILES = [
+  ["bt1_outdoor", "Outdoor"], ["avg_outdoor", "Avg outdoor"], ["bt2_flow", "Flow (BT2)"],
+  ["bt3_return", "Return (BT3)"], ["calc_flow", "Calculated flow"], ["bt7_hw_top", "Hot water top (BT7)"],
+  ["bt6_hw_charge", "Hot water charge (BT6)"], ["degree_minutes", "Degree minutes"],
+  ["compressor_fsm", "Compressor", "state"], ["op_priority", "Op priority"],
+  ["el_power_kw", "Electrical addition"], ["gp1_speed", "GP1 speed"], ["gp2_speed", "GP2 speed"],
+  ["active_alarms", "Active alarms", "alarms"],
+];
+const tileEls = {};
+function buildTiles() {
+  const box = $("#tiles");
+  for (const [key, label, type] of TILES) {
+    const t = el("div", { class: "tile" + (type === "alarms" ? " wide" : "") });
+    const val = el("div", { class: "val" });
+    const sub = el("div", { class: "sub" });
+    t.append(el("div", { class: "lbl", text: label }), val, sub);
+    box.append(t);
+    tileEls[key] = { t, val, sub, type };
+  }
+}
+function dotClass(v) {
+  if (v == null) return "";
+  if (v === "running") return "ok";
+  if (v === "starting" || v === "stopping" || v === "soft_start") return "warn";
+  if (String(v).startsWith("unknown")) return "bad";
+  return "";
+}
+function renderOverview() {
+  for (const [key, { t, val, sub, type }] of Object.entries(tileEls)) {
+    const s = sensor(key);
+    val.replaceChildren();
+    sub.replaceChildren();
+    t.classList.remove("bad");
+    if (type === "alarms") {
+      const list = s && Array.isArray(s.value) ? s.value : null;
+      val.textContent = list ? String(list.length) : "—";
+      if (list && list.length) {
+        t.classList.add("bad");
+        const ul = el("ul", { class: "alarms" });
+        list.forEach((a) => ul.append(el("li", { text: `#${a.number} ${a.title}` })));
+        sub.append(ul);
+      } else if (list) sub.textContent = "none active";
+    } else if (type === "state") {
+      const v = s ? s.value : null;
+      val.append(el("span", { class: "dot " + dotClass(v) }), v == null ? "—" : String(v));
+      const cs = sval("compressor_status");
+      if (cs != null) sub.textContent = "status: " + cs;
+    } else {
+      const f = fmtSensor(key, s);
+      val.append(f.text);
+      if (f.unit && f.text !== "—") val.append(el("span", { class: "unit", text: f.unit }));
+    }
+  }
+}
+
+// ---- sensor table
+const rowEls = {};
+let rowKeys = "";
+function buildTable() {
+  const keys = Object.keys(M.sensors);
+  const sig = keys.join("|");
+  if (sig === rowKeys) return false;
+  rowKeys = sig;
+  const body = $("#rows");
+  body.replaceChildren();
+  for (const k of Object.keys(rowEls)) delete rowEls[k];
+  for (const tier of [...TIERS, null]) {
+    const members = keys.filter((k) => (TIERS.includes(M.sensors[k].tier) ? M.sensors[k].tier : null) === tier);
+    if (!members.length) continue;
+    const head = el("tr", { class: "grp" }, el("th", { colspan: "5", text: `${tier || "other"} (${members.length})` }));
+    body.append(head);
+    const rows = [];
+    for (const k of members) {
+      const s = M.sensors[k];
+      const label = el("td", { title: s.description || "" }, s.name || k, el("span", { class: "k-inline", text: k }));
+      const vn = el("span", { class: "num" });
+      const ai = el("span", { class: "age-inline" });
+      const v = el("td", { class: "v" }, vn, ai);
+      const u = el("td", { class: "u" });
+      const a = el("td", { class: "a" });
+      const kc = el("td", { class: "k", text: k });
+      const tr = el("tr", null, label, v, u, a, kc);
+      body.append(tr);
+      rowEls[k] = { tr, v, vn, u, a, ai, head, text: `${k} ${s.name || ""} ${tier || ""}`.toLowerCase() };
+      rows.push(k);
+    }
+    head._members = rows;
+  }
+  return true;
+}
+function renderTable(changed) {
+  buildTable();
+  for (const [k, r] of Object.entries(rowEls)) {
+    const s = M.sensors[k];
+    const f = fmtSensor(k, s);
+    if (r.vn.textContent !== f.text) {
+      const hadValue = r.vn.textContent !== "";
+      r.vn.textContent = f.text;
+      if (hadValue && changed && changed.has(k)) {
+        r.v.classList.remove("flash");
+        void r.v.offsetWidth;
+        r.v.classList.add("flash");
+      }
+    }
+    if (r.u.textContent !== f.unit) r.u.textContent = f.unit;
+    const age = s.ts != null ? fmtAge(nowSrv() - s.ts) : "—";
+    r.a.textContent = age;
+    r.ai.textContent = age;
+  }
+  $("#s-count").textContent = `(${Object.keys(rowEls).length})`;
+  applyFilter();
+}
+function renderAges() {
+  for (const [k, r] of Object.entries(rowEls)) {
+    const s = M.sensors[k];
+    const age = s.ts != null ? fmtAge(nowSrv() - s.ts) : "—";
+    r.a.textContent = age;
+    r.ai.textContent = age;
+    if (k === "pi_remaining") r.vn.textContent = fmtSensor(k, s).text;
+  }
+}
+function applyFilter() {
+  const q = $("#filter").value.trim().toLowerCase();
+  let any = false;
+  for (const r of Object.values(rowEls)) {
+    const match = !q || (r.text + " " + r.vn.textContent.toLowerCase() + " " + r.u.textContent.toLowerCase()).includes(q);
+    r.tr.classList.toggle("hidden", !match);
+    if (match) any = true;
+  }
+  document.querySelectorAll("tr.grp").forEach((h) => {
+    h.classList.toggle("hidden", !(h._members || []).some((k) => !rowEls[k].tr.classList.contains("hidden")));
+  });
+  $("#no-match").hidden = any || !Object.keys(rowEls).length;
+}
+
+// ---- status card
+function section(title, rows) {
+  const dl = el("dl");
+  for (const [k, v, cls] of rows) {
+    dl.append(el("dt", { text: k }), el("dd", { class: cls || "", text: v }));
+  }
+  return el("div", null, el("h3", { text: title }), dl);
+}
+function yn(v, badWhenTrue) {
+  if (v == null) return ["—", ""];
+  return [v ? "yes" : "no", v ? (badWhenTrue ? "bad" : "yes") : "no"];
+}
+function renderStatus() {
+  const st = M.status;
+  const grid = $("#status-grid");
+  if (!st) return;
+  const t = (ts) => (ts == null ? "—" : fmtTime(ts));
+  const v = (x) => (x == null ? "—" : String(x));
+  const p = st.pump, h = st.heating, w = st.hot_water, pi = w.periodic_increase, wd = st.watchdog, id = st.identity;
+  const row = (label, val, flag, bad) => { const [txt, cls] = yn(val, bad); return [label, txt, cls]; };
+  grid.replaceChildren(
+    section("Pump", [row("online", p.online), ["port", v(p.port)], ["last ok", t(p.last_ok)], ["errors", v(p.errors)]]),
+    section("Heating", [
+      ["mode", v(h.mode)], row("active", h.active), ["suspended reason", v(h.suspended_reason)],
+      ["target DM", v(h.target_dm)], ["current DM", v(h.current_dm)], ["last push", t(h.last_push)], ["next push", t(h.next_push)],
+    ]),
+    section("Hot water", [
+      ["mode", v(w.mode)], ["effective mode", v(w.effective_mode)], ["reason", v(w.reason)],
+      row("periodic increase running", pi.running), ["remaining", pi.running ? fmtHMS(pi.remaining_seconds) : "—"],
+      row("hold phase", pi.hold), row("periodic increase enabled", pi.enabled),
+    ]),
+    section("Watchdog", [
+      row("HA alive", wd.ha_alive), ["last heartbeat", t(wd.last_heartbeat)], ["timeout", wd.timeout != null ? wd.timeout + " s" : "—"],
+      ["reverted at", t(wd.reverted_at)],
+    ]),
+    section("Identity", [
+      ["product", v(id.product)], ["software", v(id.software_version)], ["base version", v(id.base_version)],
+      ["product code", v(id.product_code)], ["clock state", v(id.clock_state)],
+      ["clock drift", id.clock_drift != null ? id.clock_drift + " s" : "—"],
+      ["pump uptime", fmtUptime(id.uptime)], ["last restart", t(id.last_restart)],
+      ["EEPROM store calls", v(id.eeprom_store_calls)], ["EEPROM write failures", v(id.eeprom_write_failures)],
+      row("EEPROM write failed", id.eeprom_write_failed, null, true), ["last health check", t(id.last_health_check)],
+    ]),
+    section("Server", [["version", v(st.version)], ["uptime", fmtUptime(st.uptime + (Date.now() - M.statusAt) / 1000)], ["TCP clients", v(st.clients)]]),
+  );
+}
+function renderDetails() {
+  const d = $("#details");
+  if (!d.open) return;
+  $("#raw-status").textContent = "status = " + JSON.stringify(M.status, null, 2);
+  $("#raw-event").textContent = "last event = " + (M.lastEvent ? JSON.stringify(M.lastEvent, null, 2) : "none yet");
+}
+
+let lastChanged = null;
+const RENDER = {
+  header: renderHeader,
+  controls: renderControls,
+  overview: renderOverview,
+  table: () => { renderTable(lastChanged); lastChanged = null; },
+  ages: renderAges,
+  status: renderStatus,
+  details: renderDetails,
+};
+function renderAll() { mark("header", "controls", "overview", "table", "status", "details"); }
+
+// ------------------------------------------------------------------ model updates
+function sameValue(a, b) { return a === b || JSON.stringify(a) === JSON.stringify(b); }
+function applyState(d, initial) {
+  M.status = d.status;
+  M.statusAt = Date.now();
+  if (typeof d.now === "number") M.skew = d.now - Date.now() / 1000;
+  const changed = new Set();
+  const next = d.sensors || {};
+  for (const [k, s] of Object.entries(next)) {
+    const old = M.sensors[k];
+    if (old && !sameValue(old.value, s.value)) changed.add(k);
+    M.sensors[k] = s;
+  }
+  for (const k of Object.keys(M.sensors)) if (!(k in next)) delete M.sensors[k];
+  lastChanged = initial ? null : changed;
+  renderAll();
+}
+function applySensorUpdate(d) {
+  const ts = typeof d.ts === "number" ? d.ts : nowSrv();
+  const changed = new Set();
+  let unknown = false;
+  for (const [k, value] of Object.entries(d.values || {})) {
+    const s = M.sensors[k];
+    if (!s) { unknown = true; continue; }
+    if (!sameValue(s.value, value)) changed.add(k);
+    s.value = value;
+    s.ts = ts;
+  }
+  if (unknown) syncState();
+  lastChanged = changed;
+  mark("controls", "overview", "table");
+}
+function applyStatus(d) {
+  M.status = d.status && typeof d.status === "object" && d.status.pump ? d.status : d;
+  M.statusAt = Date.now();
+  mark("header", "controls", "status");
+}
+
+// ------------------------------------------------------------------ network
+async function fetchState() {
+  const r = await fetch("/state", { cache: "no-store" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+async function syncState() {
+  try { applyState(await fetchState(), false); } catch (e) { /* the stream badge shows connectivity */ }
+}
+let es = null;
+function connect() {
+  if (es) es.close();
+  es = new EventSource("/events");
+  es.onopen = () => { if (!M.shutdown) { M.conn = "live"; mark("header"); } };
+  es.onerror = () => {
+    M.conn = "reconnecting";
+    mark("header");
+    if (es.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
+  };
+  const on = (name, fn) => es.addEventListener(name, (ev) => {
+    let data;
+    try { data = JSON.parse(ev.data); } catch (e) { return; }
+    M.lastEvent = { event: name, at: new Date().toISOString(), data };
+    fn(data);
+    mark("details");
+  });
+  on("snapshot", (d) => { M.shutdown = null; M.conn = "live"; applyState(d, false); });
+  on("sensor_update", applySensorUpdate);
+  on("status", applyStatus);
+  on("pump_state", (d) => {
+    if (M.status) { M.status.pump.online = !!d.online; mark("header", "status"); }
+  });
+  on("shutdown", (d) => { M.shutdown = d.reason || "shutdown"; M.conn = "stopping"; mark("header"); });
+}
+
+// ------------------------------------------------------------------ commands
+function toast(text, kind) {
+  const t = el("div", { class: "toast " + (kind || ""), text });
+  $("#toasts").append(t);
+  setTimeout(() => t.remove(), kind === "err" ? 8000 : 4000);
+}
+const DONE = {
+  set_hot_water_mode: (d) => `Hot water comfort set to ${d.mode}`,
+  set_heating_request: (d) => `Heating request ${d.mode}` + (d.active === false ? ` (suspended: ${d.suspended_reason})` : d.written_dm != null ? `, wrote ${d.written_dm} DM` : ""),
+  trigger_hot_water_boost: (d) => `Periodic increase started` + (d.remaining_seconds ? `, ${fmtHMS(d.remaining_seconds)} left` : ""),
+  refresh: () => "Refresh queued, values follow in a moment",
+};
+function optimistic(cmd, d) {
+  const now = nowSrv();
+  if (cmd === "set_hot_water_mode" && sensor("hw_comfort")) {
+    sensor("hw_comfort").value = d.mode; sensor("hw_comfort").ts = now;
+    if (M.status) M.status.hot_water.mode = d.mode;
+  } else if (cmd === "set_heating_request" && M.status) {
+    Object.assign(M.status.heating, { mode: d.mode, active: d.active ?? M.status.heating.active, suspended_reason: d.suspended_reason ?? null });
+    if (d.current_dm != null) M.status.heating.current_dm = d.current_dm;
+  } else if (cmd === "trigger_hot_water_boost" && d.started) {
+    if (sensor("pi_running")) { sensor("pi_running").value = true; sensor("pi_running").ts = now; }
+    if (sensor("pi_remaining") && d.remaining_seconds != null) { sensor("pi_remaining").value = d.remaining_seconds; sensor("pi_remaining").ts = now; }
+    if (M.status) Object.assign(M.status.hot_water.periodic_increase, { running: true, remaining_seconds: d.remaining_seconds ?? 0 });
+  }
+  renderAll();
+}
+async function send(cmd, params, btn, group) {
+  const lock = group ? [...group.querySelectorAll("button")] : [btn];
+  lock.forEach((b) => (b.disabled = true));
+  btn.classList.add("pending");
+  try {
+    const r = await fetch("/cmd", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cmd, params }),
+    });
+    const j = await r.json();
+    if (j.ok) {
+      toast((DONE[cmd] || (() => cmd + " ok"))(j.data || {}), "ok");
+      optimistic(cmd, j.data || {});
+      if (cmd === "refresh") setTimeout(syncState, 5000);
+    } else {
+      const e = j.error || {};
+      toast(`${cmd}: ${e.code || "error"}${e.message ? " — " + e.message : ""}`, "err");
+    }
+  } catch (e) {
+    toast(`${cmd}: request failed (${e.message})`, "err");
+  } finally {
+    btn.classList.remove("pending");
+    lock.forEach((b) => (b.disabled = false));
+    mark("controls");
+  }
+}
+
+// ------------------------------------------------------------------ boot
+async function init() {
+  buildControls();
+  buildTiles();
+  $("#filter").addEventListener("input", applyFilter);
+  $("#details").addEventListener("toggle", () => mark("details"));
+  renderHeader();
+  try { applyState(await fetchState(), true); } catch (e) { toast("Could not load /state: " + e.message, "err"); }
+  connect();
+  setInterval(() => mark("header", "controls", "ages"), 1000);
+  setInterval(syncState, 30000);  // refreshes sensor ages: unchanged values are not pushed as events
+}
+init();
+})();
+</script>
+</body>
+</html>
