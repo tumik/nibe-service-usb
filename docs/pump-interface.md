@@ -166,6 +166,45 @@ and handled by the same loop; the server keeps running. First successful
 `b` reply → `online`, full health check, full sensor poll, pending
 degree-minute push.
 
+## USB bus reset hang and disarming
+
+Measured on firmware 7994R7:
+
+* Once the host has raised RTS, the console listens for commands. The port is
+  then **armed**, and stays armed even after the host closes it.
+* A **USB bus reset** while the port is armed leaves the console deaf. The
+  device still enumerates as `03eb:6119`, but commands get no reply and
+  writes eventually block. Unplugging the cable does not help. **Only a
+  restart of the pump recovers it.**
+* A bus reset happens when the host reboots, when the cable is replugged and
+  on `usbreset 03eb:6119`.
+
+The server therefore **disarms** the port whenever it is idle: it lowers RTS
+and sends one CR LF. The pump ignores that line and stops listening. A bus
+reset is harmless in that state, and the next RTS raise arms the port again.
+Verified on hardware: disarm, `usbreset`, and the console answers again.
+
+* Disarm happens after `pump.idle_disarm_after` seconds without a request
+  (default 1 s) and always before the port is closed, so a clean service stop
+  or host shutdown is safe.
+* The next request raises RTS and waits `pump.arm_delay` (default 0.2 s).
+* Lowering RTS alone does not disarm, and neither does closing the port: the
+  console stops listening only when it receives a line while RTS is low.
+* What remains exposed: a bus reset in the middle of a poll (about a second
+  per minute), for example a host crash or power cut at that moment. A
+  service that is killed in the middle of a poll (SIGKILL, out of memory)
+  also leaves the port armed until it is started again.
+* No host-side recovery is known for a deaf console. Toggling RTS, a dummy
+  line, re-selecting the configuration, halting the endpoint and further bus
+  resets were tried against the firmware's USB code without effect.
+* The debug website shows the current state under Status → Pump (`USB port`,
+  `last disarm`); the `status` command reports it as `pump.armed` and
+  `pump.last_disarm`.
+* A port without RTS control (a pty, a TCP bridge) is never disarmed and is
+  reported as armed all the time; requests work as before.
+* Any other program that opens the port arms it too. After manual use, disarm
+  before unplugging or rebooting: lower RTS, write `\r\n`, then close.
+
 ## Console behaviour summary
 
 | Item | Behaviour |
@@ -218,6 +257,7 @@ class PumpClient(Protocol):
     async def start(self) -> None
     async def stop(self) -> None
     online: bool; port: str; error_count: int; last_ok: float | None          # properties
+    armed: bool; last_disarm: float | None                                    # properties, USB arming
     async def read(self, register: int, *, priority=Priority.POLL) -> int                   # raw
     async def read_many(self, registers: Sequence[int], *, priority=Priority.POLL) -> list[int]  # chunked into RI lines of ri_batch_size
     async def read_temperatures(self, *, priority=Priority.POLL) -> list[int]               # RT 1, 28 raw values
@@ -227,4 +267,5 @@ class PumpClient(Protocol):
     async def identity(self, *, priority=Priority.CONTROL) -> Identity                     # b, RV, QR
     async def clock(self, *, priority=Priority.CONTROL) -> Clock                           # AI
     def on_state_change(self, callback) -> None                                             # online / offline
+    def on_armed_change(self, callback) -> None                                             # armed / disarmed
 ```

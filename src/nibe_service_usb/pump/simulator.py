@@ -196,8 +196,19 @@ class SimulatedPumpClient:
     def last_ok(self) -> float | None:
         return self._last_ok
 
+    @property
+    def armed(self) -> bool:
+        return False  # no USB port behind the simulator
+
+    @property
+    def last_disarm(self) -> float | None:
+        return None
+
     def on_state_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
         self._callbacks.append(callback)
+
+    def on_armed_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
+        return None
 
     async def _access(self) -> None:
         """Common prologue of every request: offline check, latency, failure injection."""
