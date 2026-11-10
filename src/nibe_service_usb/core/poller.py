@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 # Core sensors that change slowly: read only in the full cycle (``poll.interval``);
 # everything else in the core tier (temperatures, pump speeds, states, alarms,
 # degree minutes, periodic increase status, uptime) is read every ``poll.fast_interval``.
-SLOW_CORE_SENSORS: frozenset[str] = frozenset({"comp_starts", "comp_hours", "comp_hours_hw"})
+SLOW_CORE_SENSORS: frozenset[str] = frozenset(
+    {"comp_starts", "comp_hours", "comp_hours_hw", "addheat_time_factor", "addheat_time_factor_hw"}
+)
 UPTIME_SENSOR = "uptime"
 UPTIME_REGISTER = 43071
 EEPROM_STORE_CALLS = 40969

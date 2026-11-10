@@ -97,7 +97,7 @@ The poller (`core/poller.py`) runs two cadences:
 
 | Cycle | Interval | Reads |
 |---|---|---|
-| **Fast** | `poll.fast_interval`, default **60 s** | All `core` sensors except the slow counters (`comp_starts`, `comp_hours`, `comp_hours_hw`): temperatures, degree minutes, compressor and pump states, hot water state, periodic-increase status. Also the alarm flags and `uptime`. |
+| **Fast** | `poll.fast_interval`, default **60 s** | All `core` sensors except the slow counters (`comp_starts`, `comp_hours`, `comp_hours_hw`, `addheat_time_factor`, `addheat_time_factor_hw`): temperatures, degree minutes, compressor and pump states, hot water state, periodic-increase status. Also the alarm flags and `uptime`. |
 | **Full** | `poll.interval`, default **600 s** | Everything in `core` including the counters, alarms, `uptime`. `settings` every `poll.settings_every`-th full cycle (default 6 = hourly). `diagnostic` if `poll.diagnostic = true`. |
 
 * A full cycle also resets the fast timer, so the two never run back to back.

@@ -77,6 +77,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `comp_starts` | 43416 | sensor, total_increasing |
 | `comp_hours` | 43420 | sensor, duration, total_increasing |
 | `comp_hours_hw` | 43424 | sensor, duration, total_increasing |
+| `addheat_time_factor` | 43081 | sensor, ×0.1 h, total_increasing; menu 3.3 "time factor" |
+| `addheat_time_factor_hw` | 43239 | sensor, ×0.1 h, total_increasing; menu 3.3 "- of which hot water" |
 
 ## Settings (hourly)
 
@@ -87,6 +89,9 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `set_addheat_step_diff` | 47209 | DM (plain integer, default 100) | menu 4.9.3 "diff. between additional steps" |
 | `set_stop_heating` | 47375 | ×0.1 °C | |
 | `set_stop_addheat` | 47376 | ×0.1 °C | |
+| `set_max_diff_comp` | 47378 | ×0.1 K | menu 5.1.3 "max diff compressor" |
+| `set_max_diff_addheat` | 47379 | ×0.1 K | menu 5.1.3 "max diff addition" |
+| `set_hw_pump_speed` | 47413 | % | menu 5.1.11, GP1 speed during a hot water charge |
 | `set_op_mode` | 47137 | enum 0 auto / 1 manual / 2 add_heat_only | mode 2 blocks the compressor; `enable` request is pointless then |
 | `set_el_max` | 47212 | ×0.01 kW | |
 | `set_curve` | 47007 | | |
@@ -111,6 +116,7 @@ Sensors in `sensors.yaml` (tier `identity`):
 |---|---|---|
 | `base_version` | `RI 32041` (cross-checked against `RV` field 2) | diagnostic sensor |
 | `country` | 48745 | diagnostic sensor |
+| `language` | 47131 | diagnostic sensor (language pack index, 5 = Finnish) |
 | `uptime` | 43071 (u32 s; also read in every fast poll) | diagnostic sensor, duration; a decrease = restart |
 | `eeprom_store_calls` | 40969 | diagnostic sensor, total_increasing (calls to the store function, 1–4 bytes each) |
 | `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing. Persisted count of EEPROM/RTC bus jobs that used all 10 tries (not only writes, see [pump-interface.md](pump-interface.md#startup--health-check-sequence)) |
