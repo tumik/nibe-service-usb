@@ -485,6 +485,24 @@ sensors:
     tier: settings
     description: "Used by the heating controller: raw threshold = value x 10, enable target = value x 10 + 1"
 
+  - name: set_start_addheat
+    label: "Start difference additional heat (setting)"
+    register: 48072
+    type: s16
+    unit: "DM"
+    kind: number
+    tier: settings
+    description: "Menu 4.9.3; additional heat step 1 starts at set_start_comp minus this value (displayed DM)"
+
+  - name: set_addheat_step_diff
+    label: "Difference between additional heat steps (setting)"
+    register: 47209
+    type: s16
+    unit: "DM"
+    kind: number
+    tier: settings
+    description: "Menu 4.9.3; degree minutes between successive additional heat steps (displayed DM)"
+
   - name: set_stop_heating
     label: "Stop heating (setting)"
     register: 47375

@@ -83,6 +83,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | key | reg | scale | note |
 |---|---|---|---|
 | `set_start_comp` | 47206 | DM (plain integer, e.g. -200) | **used by the heating controller**: raw threshold = value × 10, enable target = value × 10 + 1 |
+| `set_start_addheat` | 48072 | DM (plain integer, default 400) | menu 4.9.3 "start diff additional heat": addition step 1 starts at `(set_start_comp − value) × 10` raw |
+| `set_addheat_step_diff` | 47209 | DM (plain integer, default 100) | menu 4.9.3 "diff. between additional steps" |
 | `set_stop_heating` | 47375 | ×0.1 °C | |
 | `set_stop_addheat` | 47376 | ×0.1 °C | |
 | `set_op_mode` | 47137 | enum 0 auto / 1 manual / 2 add_heat_only | mode 2 blocks the compressor; `enable` request is pointless then |

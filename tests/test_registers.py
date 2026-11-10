@@ -33,6 +33,8 @@ def test_expected_sensors_present() -> None:
         "pi_remaining",
         "active_alarms",
         "set_start_comp",
+        "set_start_addheat",
+        "set_addheat_step_diff",
         "uptime",
         "eeprom_store_calls",
         "eeprom_write_failures",
@@ -45,6 +47,8 @@ def test_expected_sensors_present() -> None:
         assert name in SENSORS, name
     assert SENSORS["uptime"].register == 43071
     assert SENSORS["country"].register == 48745
+    assert SENSORS["set_start_addheat"].register == 48072
+    assert SENSORS["set_addheat_step_diff"].register == 47209
 
 
 def test_registers_unique_per_source() -> None:
