@@ -452,7 +452,11 @@ class SensorPoller:
             identity.eeprom_write_failures = failures
             identity.eeprom_write_failed = boot_failures != 0 or increased
             if identity.eeprom_write_failed:
-                logger.warning("EEPROM write failures: persisted %d, since boot %d", failures, boot_failures)
+                logger.warning(
+                    "EEPROM/RTC job failures (R40965/R40967): persisted %d, since boot %d",
+                    failures,
+                    boot_failures,
+                )
             restarted = self._note_uptime(uptime)
             by_register = dict(zip(HEALTH_REGISTERS, raws, strict=True))
             for sensor in self.sensors:

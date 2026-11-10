@@ -686,6 +686,7 @@ sensors:
     kind: number
     tier: identity
     state_class: total_increasing
+    description: "Persisted count of EEPROM/RTC bus jobs (EEPROM read or write, clock read or write) that used all 10 tries; never reset, not only writes"
 
   - name: eeprom_write_failures_boot
     label: "EEPROM write failures since boot"
@@ -693,6 +694,7 @@ sensors:
     type: u32
     kind: number
     tier: identity
+    description: "Same count as eeprom_write_failures, in RAM only: 0 at every display boot"
 
   - name: country
     label: "Country"

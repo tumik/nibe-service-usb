@@ -134,11 +134,35 @@ answered for `pump.offline_after` (default 60 s) and then answers again, and
      physical writes; each call stores 1–4 bytes). Diagnostic sensor
      `eeprom_store_calls`, `total_increasing`; its rate per day is the useful
      number.
-   * R40965 = total EEPROM write failures (persisted). R40967 = failures
-     since boot (RAM). Non-zero means a write was retried 10 times and never
-     succeeded, leaving a wrong value in EEPROM. Any increase of R40965 or any
-     non-zero R40967 → `WARNING` and `get_status.identity.eeprom_write_failed
-     = true`.
+   * R40965 = failed jobs on the EEPROM/RTC bus, total (persisted, never
+     reset, not even by a factory reset). R40967 = the same count since the
+     display booted (RAM). Any increase of R40965 or any non-zero R40967 →
+     `WARNING` and `get_status.identity.eeprom_write_failed = true`.
+     The names say "write failures", but the firmware (display 7994R7, the
+     task that owns the bus) counts more loosely than that:
+     * Every job type counts: EEPROM write, EEPROM read (the settings load
+       at boot), clock read and clock write. A flaky clock chip raises the
+       counter without any EEPROM problem.
+     * A job counts when its try counter reaches 10. A write that succeeds
+       on the 10th try is counted although the value was stored.
+     * For a multi-byte value only the last byte written is evaluated; a
+       failed earlier byte is not counted.
+     * Each count stores R40965 itself, which is one more EEPROM job. With a
+       dead EEPROM that job fails too, so the counter keeps climbing by
+       itself and does not equal the number of lost settings.
+     * R40965 stops at 2147483647; R40967 does not.
+
+     * Nothing ever initialises R40965: no reset group covers it, and the
+       boot range check accepts anything in 0..2147483647. Bytes left at
+       its EEPROM address by the factory or an older firmware are shown as
+       they are. The test unit reads 754974720 (`0x2D000000`) with R40967 =
+       0. That cannot be a real count, because every count also adds one to
+       R40969, so a real count cannot be far above R40969.
+
+     Only changes carry information: the absolute value of R40965 does not.
+     So 0 means no job ever ran out of tries. Non-zero means the bus had
+     trouble, most likely a setting that was not stored, but the number is
+     not an exact count of failed writes.
 6. `RI 43071` → uptime, seconds since boot, unsigned decimal. Read at every
    health check **and** with every fast poll (cheap, one register). If the
    new value is smaller than the previous one the display restarted:

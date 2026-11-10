@@ -111,8 +111,8 @@ Sensors in `sensors.yaml` (tier `identity`):
 | `country` | 48745 | diagnostic sensor |
 | `uptime` | 43071 (u32 s; also read in every fast poll) | diagnostic sensor, duration; a decrease = restart |
 | `eeprom_store_calls` | 40969 | diagnostic sensor, total_increasing (calls to the store function, 1–4 bytes each) |
-| `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing |
-| `eeprom_write_failures_boot` | 40967 | diagnostic sensor |
+| `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing. Persisted count of EEPROM/RTC bus jobs that used all 10 tries (not only writes, see [pump-interface.md](pump-interface.md#startup--health-check-sequence)) |
+| `eeprom_write_failures_boot` | 40967 | diagnostic sensor; the same count since the display booted (RAM) |
 
 Fields of `get_status.identity` (not sensors; the integration can expose them
 as diagnostic entities):
