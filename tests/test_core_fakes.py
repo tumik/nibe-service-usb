@@ -105,6 +105,17 @@ class FakePump:
     def last_ok(self) -> float | None:
         return 1_760_000_000.0
 
+    @property
+    def armed(self) -> bool:
+        return False
+
+    @property
+    def last_disarm(self) -> float | None:
+        return None
+
+    def on_armed_change(self, callback: object) -> None:
+        return None
+
     async def start(self) -> None:
         return None
 

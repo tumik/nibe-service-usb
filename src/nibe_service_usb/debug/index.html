@@ -270,7 +270,7 @@ const M = {
 const TIERS = ["core", "settings", "identity", "diagnostic"];
 const HW_MODES = ["eco", "normal", "lux"];
 const HEAT_MODES = ["auto", "enable", "disable"];
-const TS_KEYS = new Set(["last_ok", "last_push", "next_push", "last_restart", "last_health_check", "last_heartbeat", "reverted_at"]);
+const TS_KEYS = new Set(["last_ok", "last_disarm", "last_push", "next_push", "last_restart", "last_health_check", "last_heartbeat", "reverted_at"]);
 
 const nowSrv = () => Date.now() / 1000 + M.skew;
 const sensor = (k) => M.sensors[k];
@@ -609,7 +609,9 @@ function renderStatus() {
   const p = st.pump, h = st.heating, w = st.hot_water, pi = w.periodic_increase, wd = st.watchdog, id = st.identity;
   const row = (label, val, flag, bad) => { const [txt, cls] = yn(val, bad); return [label, txt, cls]; };
   grid.replaceChildren(
-    section("Pump", [row("online", p.online), ["port", v(p.port)], ["last ok", t(p.last_ok)], ["errors", v(p.errors)]]),
+    section("Pump", [row("online", p.online), ["port", v(p.port)], ["last ok", t(p.last_ok)], ["errors", v(p.errors)],
+      ["USB port", p.armed == null ? "—" : p.armed ? "armed (in use; a USB reset now would hang the console)" : "disarmed (safe to reboot or unplug)"],
+      ["last disarm", t(p.last_disarm)]]),
     section("Heating", [
       ["mode", v(h.mode)], row("active", h.active), ["suspended reason", v(h.suspended_reason)],
       ["target DM", v(h.target_dm)], ["current DM", v(h.current_dm)], ["last push", t(h.last_push)], ["next push", t(h.next_push)],

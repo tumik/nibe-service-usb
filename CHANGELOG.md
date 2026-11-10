@@ -35,6 +35,16 @@ First public release. Tested on a Nibe F1226-6 R with display firmware 7994R7.
   tests are opt-in (`--write-test`, `--eeprom`, `--memwrite`).
 - systemd unit, installation guide, CI (ruff and pytest on Python 3.11 to 3.13).
 
+### Fixed
+
+- The pump console no longer hangs after a host reboot or cable replug. On
+  firmware 7994R7 a USB bus reset while the console is listening leaves it
+  deaf until the pump is restarted. The server now disarms the port when idle
+  and before closing it (`pump.idle_disarm_after`, `pump.arm_delay`) and
+  reports the state as `pump.armed` / `pump.last_disarm` in `status` and on
+  the debug website; see
+  [docs/pump-interface.md](docs/pump-interface.md#usb-bus-reset-hang-and-disarming).
+
 ### Security
 
 - The auth key is never written to the log. Use `nibe-service-usb show-key`

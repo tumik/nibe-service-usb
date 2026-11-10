@@ -101,6 +101,7 @@ class SensorPoller:
 
     async def start(self) -> None:
         self.pump.on_state_change(self._on_pump_state)
+        self.pump.on_armed_change(self._on_pump_armed)
         await self._sync_pump()
         now = self._monotonic()
         self._next_full = now + self.config.poll.interval
@@ -125,10 +126,19 @@ class SensorPoller:
             self._startup_pending = True
             self._wake.set()
 
+    async def _on_pump_armed(self, armed: bool) -> None:
+        await self._sync_pump()
+
     async def _sync_pump(self) -> None:
-        """Copy the transport status into ``state.pump``; publish when online/port changed."""
+        """Copy the transport status into ``state.pump``; publish when online/port/armed changed."""
         status = self.state.pump
-        changed = status.online != self.pump.online or status.port != self.pump.port
+        changed = (
+            status.online != self.pump.online
+            or status.port != self.pump.port
+            or status.armed != self.pump.armed
+        )
+        status.armed = self.pump.armed
+        status.last_disarm = self.pump.last_disarm
         status.online = self.pump.online
         status.port = self.pump.port
         status.last_ok = self.pump.last_ok

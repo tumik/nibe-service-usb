@@ -29,6 +29,8 @@ class PumpStatus:
     port: str = ""
     last_ok: float | None = None
     errors: int = 0
+    armed: bool = False
+    last_disarm: float | None = None
 
 
 @dataclass
