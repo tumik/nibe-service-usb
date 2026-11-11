@@ -54,6 +54,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `compressor_inhibit` | 43405 | u8 min | sensor, duration | explains "wanted but not running" |
 | `gp1_speed` | 43437 | % | sensor | heat medium pump |
 | `gp2_speed` | 43439 | % | sensor | brine pump |
+| `gp1_state` | 43431 | enum 10 off / 15 starting / 20 on / 40 ten_day_mode / 80 calibration | sensor | heat medium pump state: 10 = stopped (speed 0), 15 = step of about one second between 10 and 20 (speed 0), 20 = running, 40 = brine pump only, with operating mode R47139 = 30 (10 days continuous) for as long as the counter R43042 is above 0, 80 = forced run at 100 %. 50 = 120 s run after a high condenser temperature info (162/163); it has no name and shows as `unknown_50` |
+| `gp2_state` | 43433 | as `gp1_state` | sensor | brine pump |
 | `qn10_hot_water` | 43481 | 0/1 | binary_sensor | valve in hot water position |
 | `hw_mode` | 43109 | enum -1 off / 0 eco / 1 normal / 2 lux / 3 periodic | sensor enum | effective mode |
 | `hw_comfort` | 47041 | enum 0 eco / 1 normal / 2 lux | sensor enum (also the value the `set_hot_water_mode` command changes) | |

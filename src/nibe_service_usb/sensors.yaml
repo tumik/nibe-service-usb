@@ -307,6 +307,26 @@ sensors:
     tier: core
     state_class: measurement
 
+  - name: gp1_state
+    label: "Heat medium pump state (GP1)"
+    register: 43431
+    type: u8
+    kind: enum
+    options: {10: "off", 15: "starting", 20: "on", 40: "ten_day_mode", 80: "calibration"}
+    tier: core
+    device_class: enum
+    description: "80 is a forced run at 100 %; 50 (timed run after a high condenser temperature) decodes to unknown_50"
+
+  - name: gp2_state
+    label: "Brine pump state (GP2)"
+    register: 43433
+    type: u8
+    kind: enum
+    options: {10: "off", 15: "starting", 20: "on", 40: "ten_day_mode", 80: "calibration"}
+    tier: core
+    device_class: enum
+    description: "Same codes as gp1_state"
+
   - name: qn10_hot_water
     label: "Valve in hot water position (QN10)"
     register: 43481

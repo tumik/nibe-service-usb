@@ -41,6 +41,8 @@ def test_expected_sensors_present() -> None:
         "addheat_time_factor",
         "addheat_time_factor_hw",
         "language",
+        "gp1_state",
+        "gp2_state",
         "uptime",
         "eeprom_store_calls",
         "eeprom_write_failures",
@@ -229,3 +231,9 @@ def test_invalid_definitions(tmp_path: Path, body: str) -> None:
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(SensorDefError):
         load_sensor_defs(tmp_path / "nope.yaml")
+
+
+def test_pump_state_text() -> None:
+    assert decode(SENSORS["gp1_state"], 10) == "off"
+    assert decode(SENSORS["gp2_state"], 20) == "on"
+    assert decode(SENSORS["gp1_state"], 50) == "unknown_50"
