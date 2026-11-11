@@ -58,23 +58,31 @@ def build_ri(
     max_registers: int = MAX_RI_REGISTERS,
 ) -> str:
     """``RI r1 r2 ...``; raises ``ValueError`` for >``max_registers`` registers or an over-long line."""
+    return _build_read("RI", registers, max_line_length, max_registers)
+
+
+def build_rl(
+    registers: Sequence[int],
+    *,
+    max_line_length: int = MAX_LINE_LENGTH,
+    max_registers: int = MAX_RI_REGISTERS,
+) -> str:
+    """``RL r1 r2 ...``: like ``RI``, but also prints time-of-day and date typed registers."""
+    return _build_read("RL", registers, max_line_length, max_registers)
+
+
+def _build_read(verb: str, registers: Sequence[int], max_line_length: int, max_registers: int) -> str:
     if not registers:
-        raise ValueError("RI needs at least one register")
+        raise ValueError(f"{verb} needs at least one register")
     if len(registers) > max_registers:
-        raise ValueError(f"RI takes at most {max_registers} registers, got {len(registers)}")
+        raise ValueError(f"{verb} takes at most {max_registers} registers, got {len(registers)}")
     for reg in registers:
         if not isinstance(reg, int) or isinstance(reg, bool) or reg < 0:
             raise ValueError(f"invalid register number {reg!r}")
-    line = "RI " + " ".join(str(r) for r in registers)
+    line = f"{verb} " + " ".join(str(r) for r in registers)
     if len(line) > max_line_length:
-        raise ValueError(f"RI line is {len(line)} characters, limit is {max_line_length}")
+        raise ValueError(f"{verb} line is {len(line)} characters, limit is {max_line_length}")
     return line
-
-
-def build_rl(register: int) -> str:
-    if register < 0:
-        raise ValueError(f"invalid register number {register!r}")
-    return f"RL {register}"
 
 
 def build_rm(address: int, length: int) -> str:
@@ -112,8 +120,8 @@ def assert_allowed(line: str, *, max_line_length: int = MAX_LINE_LENGTH) -> None
     verb = parts[0]
     if verb not in VERB_ALLOWLIST:
         raise ValueError(f"verb {verb!r} is not allowed")
-    if verb == "RI" and len(parts) - 1 > MAX_RI_REGISTERS:
-        raise ValueError(f"RI takes at most {MAX_RI_REGISTERS} registers")
+    if verb in ("RI", "RL") and len(parts) - 1 > MAX_RI_REGISTERS:
+        raise ValueError(f"{verb} takes at most {MAX_RI_REGISTERS} registers")
     if verb == "WI":
         if len(parts) != 3:
             raise ValueError(f"malformed WI: {line!r}")
@@ -148,13 +156,14 @@ def _text(reply: ReplyLike) -> str:
 
 
 def parse_ri(reply: ReplyLike, expected_count: int) -> list[int]:
+    """Reply of ``RI`` or ``RL``: one decimal per register (``ERR`` / ``TYPE-ERR`` tokens are rejected)."""
     tokens = _text(reply).split()
     if len(tokens) != expected_count:
-        raise PumpProtocolError(f"RI reply has {len(tokens)} tokens, expected {expected_count}: {tokens!r}")
+        raise PumpProtocolError(f"read reply has {len(tokens)} tokens, expected {expected_count}: {tokens!r}")
     try:
         return [int(t) for t in tokens]
     except ValueError as exc:
-        raise PumpProtocolError(f"RI reply has a non-integer token: {tokens!r}") from exc
+        raise PumpProtocolError(f"read reply has a non-integer token: {tokens!r}") from exc
 
 
 def parse_rt(reply: ReplyLike) -> list[int]:

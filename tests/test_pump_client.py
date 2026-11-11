@@ -52,6 +52,7 @@ class FakeTransport:
 
     def __init__(self) -> None:
         self.registers = dict(REGISTERS)
+        self.long_registers: dict[int, int] = {}  # values printed by RL
         self.sent: list[str] = []
         self.opened = 0
         self.closed = 0
@@ -142,6 +143,8 @@ class FakeTransport:
             return [(";".join(str(i) for i in range(self.rt_fields)) + ";").encode()]
         if verb == "RI":
             return [("".join(f"{self.registers.get(int(a), 0)} " for a in args)).encode()]
+        if verb == "RL":
+            return [("".join(f"{self.long_registers.get(int(a), 0)} " for a in args)).encode()]
         if verb == "RM":
             address, length = int(args[0], 16), int(args[1])
             if address == DM_ADDR:
@@ -748,3 +751,11 @@ async def test_serial_transport_roundtrip_over_pty() -> None:
         await transport.close()
         os.close(master)
         os.close(slave)
+
+
+async def test_read_long_many_uses_rl(started) -> None:  # noqa: ANN001
+    client, fake = started
+    fake.long_registers = {47526: 10795, 44259: 7237}
+    assert await client.read_long_many([47526, 47052, 44259]) == [10795, 0, 7237]
+    assert fake.sent[-1] == "RL 47526 47052 44259"
+    assert await client.read_long_many([]) == []

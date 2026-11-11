@@ -16,12 +16,20 @@ from typing import Any
 from nibe_service_usb.config import Config
 from nibe_service_usb.core.state import State
 from nibe_service_usb.pump.interface import (
+    Clock,
     Priority,
     PumpClient,
     PumpError,
     PumpOffline,
 )
-from nibe_service_usb.pump.registers import AlarmDef, SensorDef, decode, load_alarm_defs
+from nibe_service_usb.pump.registers import (
+    DATE_EPOCH,
+    RL_TYPES,
+    AlarmDef,
+    SensorDef,
+    decode,
+    load_alarm_defs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +37,14 @@ logger = logging.getLogger(__name__)
 # everything else in the core tier (temperatures, pump speeds, states, alarms,
 # degree minutes, periodic increase status, uptime) is read every ``poll.fast_interval``.
 SLOW_CORE_SENSORS: frozenset[str] = frozenset(
-    {"comp_starts", "comp_hours", "comp_hours_hw", "addheat_time_factor", "addheat_time_factor_hw"}
+    {
+        "comp_starts",
+        "comp_hours",
+        "comp_hours_hw",
+        "addheat_time_factor",
+        "addheat_time_factor_hw",
+        "pi_days_until",
+    }
 )
 UPTIME_SENSOR = "uptime"
 UPTIME_REGISTER = 43071
@@ -56,6 +71,7 @@ class _Plan:
 
     rt: list[SensorDef] = field(default_factory=list)
     groups: list[tuple[str, list[SensorDef]]] = field(default_factory=list)  # register sensors per tier
+    rl: list[SensorDef] = field(default_factory=list)  # time and date typed registers, read with RL
     ram: list[tuple[tuple[int, int], list[SensorDef]]] = field(default_factory=list)
     alarms: bool = False
 
@@ -98,6 +114,7 @@ class SensorPoller:
         self._next_fast = 0.0
         self._prev_uptime: int | None = None
         self._seen_uptime: int | None = None
+        self._pump_clock: Clock | None = None  # from the last health check; gives the pump's own date
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -195,6 +212,8 @@ class SensorPoller:
                 ram.setdefault(sensor.ram, []).append(sensor)
             elif sensor.rt_field is not None:
                 plan.rt.append(sensor)
+            elif sensor.type in RL_TYPES:
+                plan.rl.append(sensor)
             elif sensor.register is not None:
                 tier = "core" if sensor.name == UPTIME_SENSOR else sensor.tier
                 groups.setdefault(tier, []).append(sensor)
@@ -239,6 +258,40 @@ class SensorPoller:
         for sensor in sensors:
             self._apply(sensor, by_register[sensor.register], ts, changed)  # type: ignore[index]
 
+    def _pump_day_number(self, ts: float) -> int | None:
+        """Today's date on the pump's clock as a day number; ``None`` before the first clock read."""
+        clk = self._pump_clock
+        if clk is None:
+            return None
+        today = (clk.local + timedelta(seconds=ts - clk.host_unixtime)).date()
+        return (today - DATE_EPOCH).days
+
+    async def _read_long(
+        self, sensors: list[SensorDef], ts: float, changed: dict, priority: Priority
+    ) -> None:
+        registers: list[int] = []
+        for sensor in sensors:
+            if sensor.register not in registers:
+                registers.append(sensor.register)  # type: ignore[arg-type]
+        try:
+            raws = await self.pump.read_long_many(registers, priority=priority)
+        except PumpOffline:
+            raise
+        except PumpError as exc:
+            logger.warning("RL read failed: %s", exc)
+            self._fail(sensors, changed)
+            return
+        by_register = dict(zip(registers, raws, strict=True))
+        today = self._pump_day_number(ts)
+        for sensor in sensors:
+            raw = by_register[sensor.register]  # type: ignore[index]
+            if sensor.type == "rl_days_until":
+                if today is None:
+                    self._fail([sensor], changed)
+                    continue
+                raw -= today
+            self._apply(sensor, raw, ts, changed)
+
     async def _execute(
         self, plan: _Plan, ts: float, *, priority: Priority = Priority.POLL
     ) -> tuple[dict, bool]:
@@ -257,6 +310,8 @@ class SensorPoller:
                     await self._guard_group(plan.rt, ts, changed, priority)
             for tier, sensors in plan.groups:
                 await self._guard_group(sensors, ts, changed, priority, tier)
+            if plan.rl:
+                await self._read_long(plan.rl, ts, changed, priority)
             for (address, length), sensors in plan.ram:
                 try:
                     raw = await self.pump.read_ram(address, length, priority=priority)
@@ -430,6 +485,7 @@ class SensorPoller:
         except PumpError as exc:
             logger.warning("Health check: clock failed: %s", exc)
         else:
+            self._pump_clock = clk
             identity.clock_state = clk.state(self.config.pump.max_clock_drift)
             # The drift is meaningless while the display clock is unset (it counts from 2010-01-01).
             identity.clock_drift = None if identity.clock_state == "unset" else round(clk.drift, 1)

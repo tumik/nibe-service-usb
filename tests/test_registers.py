@@ -41,6 +41,9 @@ def test_expected_sensors_present() -> None:
         "addheat_time_factor",
         "addheat_time_factor_hw",
         "language",
+        "pi_days_until",
+        "pi_start_hour",
+        "tl_remaining",
         "gp1_state",
         "gp2_state",
         "uptime",
@@ -248,3 +251,10 @@ def test_country_language_and_pump_state_text() -> None:
     assert decode(SENSORS["gp1_state"], 10) == "off"
     assert decode(SENSORS["gp2_state"], 20) == "on"
     assert decode(SENSORS["gp1_state"], 50) == "unknown_50"
+
+
+def test_rl_types() -> None:
+    assert SENSORS["pi_start_hour"].type == "rl_hour"
+    assert decode(SENSORS["pi_start_hour"], 64800) == 18
+    assert decode(SENSORS["tl_remaining"], 10795) == 10795
+    assert decode(SENSORS["pi_days_until"], 14) == 14

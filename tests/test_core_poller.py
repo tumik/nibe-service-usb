@@ -349,3 +349,31 @@ async def test_post_poll_hooks_run(tmp_path) -> None:
     poller.on_polled.append(lambda: calls.append(1))
     await poller.poll_now()
     assert calls == [1]
+
+
+async def test_rl_sensors_time_and_days_until(tmp_path) -> None:
+    poller, pump, state, rec, clock = make(tmp_path)
+    pump.clock_local = datetime(2026, 10, 11, 17, 47, 28)  # day number 7223
+    pump.host_unixtime = clock()
+    pump.long_registers = {44259: 7237, 47052: 18 * 3600, 47526: 10795}
+    await poller.poll_now()
+    assert state.get("pi_days_until") is None  # the pump's date is not known before a health check
+    assert state.get("tl_remaining") == 10795
+    await poller.health_check()
+    assert state.get("pi_start_hour") == 18
+    await poller.poll_now()
+    assert state.get("pi_days_until") == 14
+    assert ("read_long_many", [44259, 47526]) in pump.calls
+    assert 44259 not in [r for name, *args in pump.calls if name == "read_many" for r in args[0]]
+    clock.advance(7 * 3600)  # past midnight on the pump: the counter and the date move together
+    pump.long_registers[44259] = 7237
+    await poller.poll_now()
+    assert state.get("pi_days_until") == 13
+
+
+async def test_rl_failure_marks_only_rl_sensors(tmp_path) -> None:
+    poller, pump, state, *_ = make(tmp_path)
+    pump.fail_registers[47526] = PumpTimeout("no reply")
+    await poller.poll_now()
+    assert state.get("tl_remaining") is None
+    assert state.get("bt1_outdoor") == -3.4

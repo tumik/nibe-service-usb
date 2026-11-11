@@ -29,10 +29,11 @@ from .interface import (
     PumpTimeout,
     WriteFailed,
 )
-from .registers import SensorDef
+from .registers import DATE_EPOCH, SensorDef
 
 DM_ADDRESS = 0x2038AF18
 PI_TIMER_ADDRESS = 0x2066718C
+PI_DAYS_REGISTER = 44259  # days until the next periodic increase
 PI_DURATION = 5 * 3600
 PI_TRIGGER_WINDOW = 30.0
 RT_FIELDS = 28
@@ -71,6 +72,9 @@ SEED_REGISTERS: dict[int, int] = {
     43086: 10,
     43437: 0,
     43431: 10,
+    47052: 2 * 3600,
+    44259: 9,
+    47526: 0,
     43433: 10,
     43439: 0,
     43516: 0,
@@ -244,6 +248,18 @@ class SimulatedPumpClient:
         regs = list(registers)
         for i in range(0, len(regs), batch):
             out.extend(await self._ri(regs[i : i + batch]))
+        return out
+
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        """``RL``: 44259 is printed as the day number of today + the stored day counter."""
+        await self._access()
+        today = (CLOCK_EPOCH + timedelta(seconds=self.registers.get(43071, 0))).date()
+        out = []
+        for r in registers:
+            value = self.registers.get(r, 0)
+            out.append(value + (today - DATE_EPOCH).days if r == PI_DAYS_REGISTER else value)
         return out
 
     async def _ri(self, registers: list[int]) -> list[int]:

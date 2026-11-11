@@ -375,6 +375,14 @@ class SerialPumpClient:
             out.extend(await self._read_chunk(chunk, priority))
         return out
 
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        out: list[int] = []
+        for chunk in self._chunks(registers):  # an RI line and an RL line have the same length
+            out.extend(await self._read_chunk(chunk, priority, build=codec.build_rl))
+        return out
+
     def _chunks(self, registers: Sequence[int]) -> list[list[int]]:
         cfg = self._config
         limit = min(cfg.ri_batch_size, codec.MAX_RI_REGISTERS)
@@ -400,8 +408,10 @@ class SerialPumpClient:
             chunks.append(current)
         return chunks
 
-    async def _read_chunk(self, chunk: list[int], priority: Priority) -> list[int]:
-        line = codec.build_ri(chunk, max_line_length=self._config.max_line_length)
+    async def _read_chunk(
+        self, chunk: list[int], priority: Priority, *, build: Callable[..., str] = codec.build_ri
+    ) -> list[int]:
+        line = build(chunk, max_line_length=self._config.max_line_length)
         count = len(chunk)
 
         async def op() -> list[int]:

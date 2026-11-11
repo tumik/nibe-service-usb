@@ -12,7 +12,7 @@ from nibe_service_usb.pump.interface import (
     PumpOffline,
     PumpTimeout,
 )
-from nibe_service_usb.pump.registers import load_sensor_defs
+from nibe_service_usb.pump.registers import DATE_EPOCH, load_sensor_defs
 from nibe_service_usb.pump.simulator import DM_ADDRESS, PI_TIMER_ADDRESS, SimulatedPumpClient
 
 SENSORS = load_sensor_defs(None)
@@ -295,3 +295,10 @@ async def test_realtime_ticker_advances_time() -> None:
     await asyncio.sleep(1.2)
     await sim.stop()
     assert sim.registers[43071] >= 82791 + 1
+
+
+async def test_rl_registers(sim: SimulatedPumpClient) -> None:
+    hour, date_number, lux = await sim.read_long_many([47052, 44259, 47526])
+    assert (hour, lux) == (2 * 3600, 0)
+    clock = await sim.clock()
+    assert date_number - (clock.local.date() - DATE_EPOCH).days == 9

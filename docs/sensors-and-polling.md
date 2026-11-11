@@ -68,12 +68,20 @@ alarms:                               # flag registers folded into the `active_a
 ```
 
 Fields: `name`, `label`, `register`, `rt_field`, `ram`, `type` (`s8 u8 s16
-u16 s32 u32`, or `ram_timer_running` / `ram_timer_seconds` / `ram_s32`),
+u16 s32 u32`, or `ram_timer_running` / `ram_timer_seconds` / `ram_s32`, or
+`rl_seconds` / `rl_hour` / `rl_days_until`),
 `scale`, `unit`, `kind` (`temperature number enum binary duration
 alarm_list`), `precision`, `options`, `tier` (`core settings identity
 diagnostic`), `enabled`, `device_class`, `state_class`, `description`.
 `nibe-service-usb check-config` validates the file and prints the counts per
 tier.
+
+The `rl_*` types are for registers that hold a time of day or a date. They are
+read with `RL` instead of `RI` (all of them in one line per cycle):
+`rl_seconds` gives the seconds, `rl_hour` the whole hours, and `rl_days_until`
+the number of days from the pump's own date to the date in the register. The
+pump's date comes from the clock read at the health check, so the value does
+not depend on the display clock being set.
 
 Rules:
 
@@ -97,7 +105,7 @@ The poller (`core/poller.py`) runs two cadences:
 
 | Cycle | Interval | Reads |
 |---|---|---|
-| **Fast** | `poll.fast_interval`, default **60 s** | All `core` sensors except the slow counters (`comp_starts`, `comp_hours`, `comp_hours_hw`, `addheat_time_factor`, `addheat_time_factor_hw`): temperatures, degree minutes, compressor and pump states, hot water state, periodic-increase status. Also the alarm flags and `uptime`. |
+| **Fast** | `poll.fast_interval`, default **60 s** | All `core` sensors except the slow counters (`comp_starts`, `comp_hours`, `comp_hours_hw`, `addheat_time_factor`, `addheat_time_factor_hw`, `pi_days_until`): temperatures, degree minutes, compressor and pump states, hot water state, periodic-increase status. Also the alarm flags and `uptime`. |
 | **Full** | `poll.interval`, default **600 s** | Everything in `core` including the counters, alarms, `uptime`. `settings` every `poll.settings_every`-th full cycle (default 6 = hourly). `diagnostic` if `poll.diagnostic = true`. |
 
 * A full cycle also resets the fast timer, so the two never run back to back.

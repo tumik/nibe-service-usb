@@ -68,6 +68,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `pi_failure` | 45111 | 0/1 | binary_sensor, problem | periodic increase failed (info 181) |
 | `pi_running` | `RM 0x2066718C 3` ≠ 0 | 0/1 | binary_sensor, running | periodic increase in progress |
 | `pi_remaining` | same, h/m/s → seconds | s | sensor, duration | time the run can still last |
+| `pi_days_until` | `RL 44259` (date) minus the pump's own date | d | sensor, duration | days until the next periodic increase; counted down at midnight, equals the period right after a run; the run starts at `pi_start_hour` on day 0. Read every 10 minutes |
+| `tl_remaining` | `RL 47526` | s | sensor, duration | temporary lux time left, 0 when not running |
 | `pi_hold` | 43014 | 0/1 | binary_sensor | target reached, 1 h hold phase (only meaningful while running) |
 | `pi_enabled` | 47050 | 0/1 | binary_sensor | periodic increase enable bit (the trigger toggles it) |
 | `active_alarms` | 53 flag regs (6 `RI` lines of 9) | list of `{number, title}` | sensor (state = count, attribute = list) | one entity instead of 53 binary sensors; polled with core because info-class flags do not raise `any_alarm` |
@@ -103,12 +105,9 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `set_hw_start_eco/normal/lux` | 47045 / 47044 / 47043 | ×0.1 °C | |
 | `set_hw_stop_eco/normal/lux` | 47049 / 47048 / 47047 | ×0.1 °C | |
 | `pi_period` | 47051 | days | |
+| `pi_start_hour` | `RL 47052` (seconds since midnight) / 3600 | h | hour of the day at which a due periodic increase starts |
 | `pi_stop_temp` | 47046 | ×0.1 °C | |
 | `set_filter_time` | 47377 | h | |
-
-Not implemented (would need the `RL` command for time/date typed registers):
-`pi_days_until` (44259, date → days), `pi_start_hour` (47052),
-`tl_remaining` (47526, seconds).
 
 ## Identity (health check: startup / reconnect / daily)
 

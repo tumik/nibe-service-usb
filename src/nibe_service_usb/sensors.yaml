@@ -439,6 +439,27 @@ sensors:
     state_class: measurement
     description: "Time the run can still last"
 
+  - name: pi_days_until
+    label: "Days until the next periodic increase"
+    register: 44259
+    type: rl_days_until
+    unit: "d"
+    kind: duration
+    tier: core
+    device_class: duration
+    description: "Counted down at midnight; equals the period right after a run. The run starts at pi_start_hour on day 0"
+
+  - name: tl_remaining
+    label: "Temporary lux remaining"
+    register: 47526
+    type: rl_seconds
+    unit: "s"
+    kind: duration
+    tier: core
+    device_class: duration
+    state_class: measurement
+    description: "0 when temporary lux is not running"
+
   - name: pi_hold
     label: "Periodic increase hold phase"
     register: 43014
@@ -732,6 +753,15 @@ sensors:
     unit: "d"
     kind: number
     tier: settings
+
+  - name: pi_start_hour
+    label: "Periodic increase start time (setting)"
+    register: 47052
+    type: rl_hour
+    unit: "h"
+    kind: number
+    tier: settings
+    description: "Hour of the day (0..23) at which a due periodic increase starts"
 
   - name: pi_stop_temp
     label: "Periodic increase stop temperature (setting)"

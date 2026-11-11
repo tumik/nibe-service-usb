@@ -37,7 +37,7 @@ QR AI RT RI RL RM WI WM`); anything else raises before reaching the port.
 | `AI` | 5 lines: `Year 2010 Month 1 Day 1` / `Hour 22 Minute 21 Second 45` / `DLS 0` / `TZ Helsinki W-Offset 2 S-Offset 3` / `Unixtime 1262373705` | clock check: compare `Unixtime` to host time, report drift |
 | `RT 1` | `v1;v2;…;v28` raw s16 ×0.1 °C | all BT temperatures in one line; field N is BT N (confirmed by the probe, see below; unused slots are constant 0 or -32768) |
 | `RI r1 [r2 … r9]` | raw integer(s), space separated, trailing space, CR LF: `46 254 ` | any register by number; **9 per line** (line ≤ 61 chars; the parser caps at 10 registers). Prints `0 ` for unknown ids in the 3xxxx–4xxxx range and for time/date typed registers; very low ids print other things (`RI 1` printed the product code string, `RI 10` printed an empty token), so only the documented register ids are ever sent. |
-| `RL r` | seconds / day number | time-of-day and date typed registers (`47052`, `44259`, `47526`). Allowed by the transport but not used yet. |
+| `RL r1 r2 …` | `v1 v2 … ` like `RI` | same as `RI` (same limits, plain registers print the same value), but it also prints the time-of-day and date typed registers, for which `RI` prints `0`: a time of day or countdown as **seconds** (`47052` = start hour × 3600, `47526`), a date as the **day number counted from 2007-01-01 = 0** (`44259` = the date of the next periodic increase, i.e. the pump's own date plus the day counter). An unknown register prints `ERR` in its place. Used for the sensors `pi_start_hour`, `pi_days_until` and `tl_remaining`. |
 | `RM 0x<addr> <n>` | `n` hex byte pairs, **each followed by a NUL byte**, then CR LF (`ec\0ff\0ff\0ff\0\r\n`) | raw RAM read. Used for the DM RAM copy (`RM 0x2038af18 4`, s32 little-endian) and the periodic-increase run timer (`RM 0x2066718C 3`, h m s). The parser strips NULs before decoding. |
 | `WI r v` | `1` | register write; goes through the firmware's "is this register persisted?" check and **costs one EEPROM store call** for persisted registers (measured for R40940). Used for settings that must persist (R47041, R47050), and for R40940 only with `dm_write_method = "register"`. |
 | `WM 0x<addr> <hex>` | `1` | raw RAM write, bytes as hex pairs in memory order (little-endian for integers): `WM 0x2038af18 00ffffff` = raw -256, `00010000` = +256. **No EEPROM store** (measured: counter unchanged across three writes, read-back via `RI 40940` correct). This is how degree minutes are written. |
@@ -284,6 +284,7 @@ class PumpClient(Protocol):
     armed: bool; last_disarm: float | None                                    # properties, USB arming
     async def read(self, register: int, *, priority=Priority.POLL) -> int                   # raw
     async def read_many(self, registers: Sequence[int], *, priority=Priority.POLL) -> list[int]  # chunked into RI lines of ri_batch_size
+    async def read_long_many(self, registers: Sequence[int], *, priority=Priority.POLL) -> list[int]  # the same with RL (time and date registers)
     async def read_temperatures(self, *, priority=Priority.POLL) -> list[int]               # RT 1, 28 raw values
     async def read_ram(self, address: int, length: int, *, priority=Priority.POLL) -> bytes # RM
     async def write(self, register: int, value: int, *, priority=Priority.COMMAND) -> None  # WI, expects "1", read-back

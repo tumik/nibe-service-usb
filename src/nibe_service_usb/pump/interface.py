@@ -132,6 +132,12 @@ class PumpClient(Protocol):
         """Any number of registers; chunked into lines of ``ri_batch_size`` internally."""
         ...
 
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        """``RL``: like ``read_many``, for time-of-day (seconds) and date (day number) registers."""
+        ...
+
     async def read_temperatures(self, *, priority: Priority = Priority.POLL) -> list[int]:
         """``RT 1``: 28 raw values."""
         ...

@@ -7,6 +7,7 @@ is also accepted as the ``sensors`` list (custom files without alarms).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,12 @@ _INT_TYPES: dict[str, tuple[int, bool]] = {  # type -> (bits, signed)
 }
 # RAM based types: raw value is the bytes returned by ``RM``.
 RAM_TYPES = ("ram_timer", "ram_s32", "ram_timer_running", "ram_timer_seconds")
-TYPES = (*_INT_TYPES, *RAM_TYPES)
+# Types read with ``RL`` instead of ``RI``. The raw value is seconds (time of day or a
+# countdown) for ``rl_seconds`` / ``rl_hour`` and a number of days for ``rl_days_until``
+# (the poller turns the day number of the reply into days from the pump's own date).
+RL_TYPES = ("rl_seconds", "rl_hour", "rl_days_until")
+TYPES = (*_INT_TYPES, *RAM_TYPES, *RL_TYPES)
+DATE_EPOCH = date(2007, 1, 1)  # day number 0 of a date typed register
 
 TEMPERATURE_SENTINELS = (-32768, -32767)  # open/short circuit, over range
 RT_FIELD_MAX = 28
@@ -62,7 +68,7 @@ class SensorDef:
     register: int | None
     rt_field: int | None
     ram: tuple[int, int] | None
-    type: str  # s8 u8 s16 u16 s32 u32 | ram_timer ram_s32 ram_timer_running ram_timer_seconds
+    type: str  # s8 u8 s16 u16 s32 u32 | ram_* (``RAM_TYPES``) | rl_* (``RL_TYPES``)
     scale: float
     unit: str
     kind: str  # temperature number enum binary duration alarm_list
@@ -269,7 +275,9 @@ def _normalise(type_: str, raw: int) -> int:
 def decode(sensor: SensorDef, raw: int | bytes) -> float | int | str | bool | None:
     """Convert a raw reading to its published value.
 
-    * ``RI``/``RT`` register values are ints; RAM based types take the ``RM`` bytes.
+    * ``RI``/``RL``/``RT`` register values are ints; RAM based types take the ``RM`` bytes.
+    * ``rl_hour`` gives the whole hours of a time of day; ``rl_days_until`` takes the
+      number of days (already relative to the pump's date).
     * Temperature sentinels (-32768, -32767) give ``None``.
     * ``binary`` gives a bool, ``enum`` the option string (``unknown_<n>`` for a
       value without an option), other kinds the scaled number rounded to
@@ -295,7 +303,10 @@ def decode(sensor: SensorDef, raw: int | bytes) -> float | int | str | bool | No
     else:
         if isinstance(raw, bool) or not isinstance(raw, int):
             raise TypeError(f"{sensor.name}: type {sensor.type} needs an int, got {type(raw).__name__}")
-        value = _normalise(sensor.type, raw)
+        if sensor.type in RL_TYPES:
+            value = raw // 3600 if sensor.type == "rl_hour" else raw
+        else:
+            value = _normalise(sensor.type, raw)
 
     if sensor.kind == "temperature" and value in TEMPERATURE_SENTINELS:
         return None

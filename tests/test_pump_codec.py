@@ -16,7 +16,12 @@ def test_simple_builders() -> None:
     assert codec.build_qr() == "QR"
     assert codec.build_ai() == "AI"
     assert codec.build_rt() == "RT 1"
-    assert codec.build_rl(47052) == "RL 47052"
+    assert codec.build_rl([47052]) == "RL 47052"
+    assert codec.build_rl([47526, 47052, 44259]) == "RL 47526 47052 44259"
+    with pytest.raises(ValueError):
+        codec.build_rl([])
+    with pytest.raises(ValueError):
+        codec.build_rl(list(range(11)))
 
 
 def test_build_ri_matches_probe_log() -> None:
@@ -70,7 +75,7 @@ def test_every_builder_output_is_allowed() -> None:
         codec.build_ai(),
         codec.build_rt(),
         codec.build_ri([40004, 40008]),
-        codec.build_rl(47052),
+        codec.build_rl([47052, 44259]),
         codec.build_rm(0x2038AF18, 4),
         codec.build_wi(47041, 2),
         codec.build_wm(0x2038AF18, codec.encode_s32_le(-2000)),
@@ -316,3 +321,12 @@ def test_over_long_line_gets_no_reply_and_is_refused() -> None:
             assert reply == b""
             with pytest.raises(ValueError):
                 codec.assert_allowed(text)
+
+
+def test_rl_reply_is_parsed_like_ri() -> None:
+    # replies of the console: three registers, and an unknown register in the middle
+    assert codec.parse_ri(b"10795 0 7237 \r\n", 3) == [10795, 0, 7237]
+    with pytest.raises(PumpProtocolError):
+        codec.parse_ri(b"0 ERR 7237 \r\n", 3)
+    with pytest.raises(ValueError):
+        codec.assert_allowed("RL " + " ".join(str(n) for n in range(11)))
