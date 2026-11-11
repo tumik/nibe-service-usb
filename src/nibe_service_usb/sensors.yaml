@@ -798,6 +798,23 @@ sensors:
     kind: number
     tier: identity
 
+  - name: country_name
+    label: "Country code"
+    register: 48745
+    type: s16
+    kind: enum
+    options: {
+      0: other, 1: "AL", 2: "AD", 3: "AM", 4: "AT", 5: "AZ", 6: "BY", 7: "BE", 8: "BA", 9: "BG",
+      10: "HR", 11: "CY", 12: "CZ", 13: "DK", 14: "EE", 15: "FI", 16: "FR", 17: "GE", 18: "DE",
+      19: "GR", 20: "HU", 21: "IS", 22: "IE", 23: "IT", 24: "KZ", 25: "LV", 26: "LI", 27: "LT",
+      28: "LU", 29: "MK", 30: "MT", 31: "MD", 32: "MC", 33: "ME", 34: "NL", 35: "NO", 36: "PL",
+      37: "PT", 38: "RO", 39: "RU", 40: "SM", 41: "RS", 42: "SK", 43: "SI", 44: "ES", 45: "SE",
+      46: "CH", 47: "TR", 48: "UA", 49: "GB", 50: "VA", 51: "AX", 52: not_selected
+    }
+    tier: identity
+    device_class: enum
+    description: "ISO code of the country register, as on service info page 9/9"
+
   - name: language
     label: "Display language"
     register: 47131
@@ -805,6 +822,20 @@ sensors:
     kind: number
     tier: identity
     description: "Language pack index: 0 = English, 5 = Finnish"
+
+  - name: language_name
+    label: "Display language name"
+    register: 47131
+    type: s8
+    kind: enum
+    options: {
+      0: english, 1: svenska, 2: deutsch, 3: francais, 4: espanol, 5: suomi, 6: lietuviu, 7: cesky,
+      8: polski, 9: nederlands, 10: norsk, 11: dansk, 12: eesti, 13: latviesu, 14: russkiy,
+      15: italiano, 16: magyar, 17: slovencina, 18: turkce, 19: hrvatski, 20: romana, 21: islenska
+    }
+    tier: identity
+    device_class: enum
+    description: "Name of the display language as in the pump's language menu"
 
   - name: base_version
     label: "PCA base version"

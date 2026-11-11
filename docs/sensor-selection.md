@@ -117,8 +117,10 @@ Sensors in `sensors.yaml` (tier `identity`):
 | key | source | HA |
 |---|---|---|
 | `base_version` | `RI 32041` (cross-checked against `RV` field 2) | diagnostic sensor |
-| `country` | 48745 | diagnostic sensor |
+| `country` | 48745 | diagnostic sensor (number) |
+| `country_name` | 48745 | diagnostic sensor, enum: ISO code (`AX`, `FI`, ...), `other` (0), `not_selected` (52) |
 | `language` | 47131 | diagnostic sensor (language pack index, 5 = Finnish) |
+| `language_name` | 47131 | diagnostic sensor, enum: name in the pump's language menu (`suomi`, `svenska`, ...) |
 | `uptime` | 43071 (u32 s; also read in every fast poll) | diagnostic sensor, duration; a decrease = restart |
 | `eeprom_store_calls` | 40969 | diagnostic sensor, total_increasing (calls to the store function, 1–4 bytes each) |
 | `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing. Persisted count of EEPROM/RTC bus jobs that used all 10 tries (not only writes, see [pump-interface.md](pump-interface.md#startup--health-check-sequence)) |

@@ -60,7 +60,12 @@ def test_expected_sensors_present() -> None:
 
 
 def test_registers_unique_per_source() -> None:
-    registers = [s.register for s in SENSORS.values() if s.register is not None]
+    # A register may be published twice only as a number plus its text form (`<name>_name`).
+    text_forms = {"country_name", "language_name"}
+    for name in text_forms:
+        assert SENSORS[name].register == SENSORS[name.removesuffix("_name")].register
+        assert SENSORS[name].kind == "enum"
+    registers = [s.register for s in SENSORS.values() if s.register is not None and s.name not in text_forms]
     assert len(registers) == len(set(registers))
 
 
@@ -233,7 +238,13 @@ def test_missing_file(tmp_path: Path) -> None:
         load_sensor_defs(tmp_path / "nope.yaml")
 
 
-def test_pump_state_text() -> None:
+def test_country_language_and_pump_state_text() -> None:
+    assert decode(SENSORS["country_name"], 51) == "AX"
+    assert decode(SENSORS["country_name"], 15) == "FI"
+    assert decode(SENSORS["country_name"], 52) == "not_selected"
+    assert decode(SENSORS["country"], 51) == 51
+    assert decode(SENSORS["language_name"], 5) == "suomi"
+    assert decode(SENSORS["language"], 5) == 5
     assert decode(SENSORS["gp1_state"], 10) == "off"
     assert decode(SENSORS["gp2_state"], 20) == "on"
     assert decode(SENSORS["gp1_state"], 50) == "unknown_50"
