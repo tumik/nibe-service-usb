@@ -90,10 +90,16 @@ async def main(host: str, port: int, key_text: str) -> None:
     hello = json.loads(await reader.readline())
     server_nonce = hello["data"]["nonce"]
     client_nonce = base64.b64encode(secrets.token_bytes(32)).decode()
-    result = await request(1, "auth", {
-        "proto": 1, "client": "example/0.1", "client_nonce": client_nonce,
-        "proof": compute_proof(key, server_nonce, client_nonce),
-    })
+    result = await request(
+        1,
+        "auth",
+        {
+            "proto": 1,
+            "client": "example/0.1",
+            "client_nonce": client_nonce,
+            "proof": compute_proof(key, server_nonce, client_nonce),
+        },
+    )
     assert result["ok"], result
     assert verify_server_proof(key, server_nonce, client_nonce, result["data"]["server_proof"])
     print(json.dumps((await request(2, "get_status"))["data"], indent=2))

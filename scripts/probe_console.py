@@ -266,7 +266,7 @@ def parse_ai(text: str) -> list[str]:
         pump = int(m.group(1))
         now = time.time()
         out.append(
-            f"pump unixtime = {pump} = {dt.datetime.fromtimestamp(pump, dt.timezone.utc):%Y-%m-%d %H:%M:%S} UTC"
+            f"pump unixtime = {pump} = {dt.datetime.fromtimestamp(pump, dt.UTC):%Y-%m-%d %H:%M:%S} UTC"
         )
         out.append(f"host  unixtime = {now:.0f}; drift pump-host = {pump - now:+.0f} s")
         if pump < 1_600_000_000:
@@ -296,9 +296,7 @@ def fmt_temp(raw: int) -> str:
 
 def parse_rt(text: str) -> list[str]:
     fields = [f.strip() for f in text.strip().rstrip(";").split(";")]
-    out = [
-        f"{len(fields)} ';'-separated fields (field N = BT N)"
-    ]
+    out = [f"{len(fields)} ';'-separated fields (field N = BT N)"]
     for i, f in enumerate(fields, start=1):
         try:
             raw = int(f)
@@ -329,7 +327,8 @@ def parse_ri(text: str, cmd: str) -> list[str]:
         if unit == "°C" and raw in SENTINELS:
             val = SENTINELS[raw]
         elif reg == 43071:
-            val = f"{raw} s = {raw // 86400} d {(raw % 86400) // 3600:02d}:{(raw % 3600) // 60:02d}:{raw % 60:02d}"
+            hms = f"{(raw % 86400) // 3600:02d}:{(raw % 3600) // 60:02d}:{raw % 60:02d}"
+            val = f"{raw} s = {raw // 86400} d {hms}"
         elif scale == 1:
             val = f"{raw}{(' ' + unit) if unit else ''}"
         else:
@@ -349,12 +348,14 @@ def parse_rm(text: str) -> list[str]:
     out.append(f"bytes = {data.hex(' ')}")
     if len(data) == 4:
         out.append(
-            f"as s32 little-endian = {int.from_bytes(data, 'little', signed=True)}  (big-endian would be {int.from_bytes(data, 'big', signed=True)})"
+            f"as s32 little-endian = {int.from_bytes(data, 'little', signed=True)}  "
+            f"(big-endian would be {int.from_bytes(data, 'big', signed=True)})"
         )
     if len(data) == 3:
         h, m, sec = data
         out.append(
-            f"as h/m/s = {h:02d}:{m:02d}:{sec:02d} remaining -> periodic increase {'ACTIVE' if (h, m, sec) != (0, 0, 0) else 'not running'}"
+            f"as h/m/s = {h:02d}:{m:02d}:{sec:02d} remaining -> "
+            f"periodic increase {'ACTIVE' if (h, m, sec) != (0, 0, 0) else 'not running'}"
         )
     return out
 
@@ -474,9 +475,12 @@ def main() -> int:
             print(f"unknown labels: {sorted(missing)}", file=sys.stderr)
             return 2
 
+    mode = (
+        "limits" if args.limits else "eeprom" if args.eeprom else "memwrite" if args.memwrite else "default"
+    )
     print(
         f"port={args.port} baud={args.baud} rts={not args.no_rts} dtr={not args.no_dtr} "
-        f"idle={args.idle}s max_wait={args.max_wait}s delay={args.delay}s mode={'limits' if args.limits else 'eeprom' if args.eeprom else 'memwrite' if args.memwrite else 'default'}"
+        f"idle={args.idle}s max_wait={args.max_wait}s delay={args.delay}s mode={mode}"
     )
     print("commands that will be sent (each followed by CR LF):")
     for c in cmds:
@@ -504,9 +508,7 @@ def main() -> int:
     ser.rts = not args.no_rts
     ser.dtr = not args.no_dtr
     ser.open()
-    logln(
-        f"# {dt.datetime.now().isoformat()} opened {args.port} mode={'limits' if args.limits else 'eeprom' if args.eeprom else 'memwrite' if args.memwrite else 'default'}"
-    )
+    logln(f"# {dt.datetime.now().isoformat()} opened {args.port} mode={mode}")
     try:
         ser.reset_input_buffer()
         pending, _ = read_reply(ser, idle=0.5, max_wait=1.5)
@@ -533,7 +535,8 @@ def main() -> int:
             print(f"    raw ({len(raw)} bytes, {fb}, total {elapsed:.2f} s): {raw!r}")
             if not raw:
                 print(
-                    "    !! NO REPLY within max-wait (if this is an RI line: probably over the line limit; expect its reply on the next command)"
+                    "    !! NO REPLY within max-wait (if this is an RI line: probably over the line limit; "
+                    "expect its reply on the next command)"
                 )
             else:
                 text = raw.decode("latin-1")
@@ -552,17 +555,23 @@ def main() -> int:
             if len(b) > 1 and len(a) > 1:
                 try:
                     d = int(a[1]) - int(b[1])
-                    print(
-                        f"    EEPROM store calls {b[1]} -> {a[1]} (delta {d}): "
-                        f"{'a DM write DOES cost an EEPROM store call' if d > 0 else 'no EEPROM store seen for the DM write'}"
+                    cost = (
+                        "a DM write DOES cost an EEPROM store call"
+                        if d > 0
+                        else "no EEPROM store seen for the DM write"
                     )
+                    print(f"    EEPROM store calls {b[1]} -> {a[1]} (delta {d}): {cost}")
                 except ValueError:
                     pass
-            l = observed.get("WI-after-70s")
-            if l and len(l) >= 2:
+            later = observed.get("WI-after-70s")
+            if later and len(later) >= 2:
                 print(
-                    f"    DM raw 70 s later {l[0]} with heat demand {l[1]}: "
-                    f"{'pump RESET it (heat demand 0 -> DM forced to 0)' if l[0] == '0' else 'pump kept/integrated it'}"
+                    f"    DM raw 70 s later {later[0]} with heat demand {later[1]}: "
+                    + (
+                        "pump RESET it (heat demand 0 -> DM forced to 0)"
+                        if later[0] == "0"
+                        else "pump kept/integrated it"
+                    )
                 )
         if "MW-t0" in observed and "MW-after+256" in observed:
             print("\n=== memory write test summary (R40940, R40969)")
@@ -575,7 +584,8 @@ def main() -> int:
                 vals = [observed["MW-after-20"][0], observed["MW-after-256"][0], observed["MW-after+256"][0]]
                 print(f"    read-backs after WM -20 / -256 / +256: {vals} (expected ['-20', '-256', '256'])")
                 print(
-                    f"    EEPROM store calls delta across 3 WM writes: {d} ({'NO EEPROM cost' if d == 0 else 'EEPROM touched!'})"
+                    f"    EEPROM store calls delta across 3 WM writes: {d} "
+                    f"({'NO EEPROM cost' if d == 0 else 'EEPROM touched!'})"
                 )
             except (KeyError, ValueError, IndexError):
                 pass
@@ -600,7 +610,8 @@ def main() -> int:
                 wr = int(observed["EE-after-writes"][1]) - int(observed["EE-before-writes"][1])
                 print(f"    background increase over ~180 s without writes: {bg}")
                 print(
-                    f"    increase across 3 DM writes: {wr} ({'one call per write' if wr == 3 else 'NOT one per write'})"
+                    f"    increase across 3 DM writes: {wr} "
+                    f"({'one call per write' if wr == 3 else 'NOT one per write'})"
                 )
             except (KeyError, ValueError, IndexError):
                 pass

@@ -130,8 +130,11 @@ def cmd_show_key(config: Config) -> int:
     if not (config.data_dir / "auth.key").exists():
         # Never create the key here: run as the wrong user (e.g. root) this would leave
         # a key file the service cannot read. The server creates it on its first start.
-        print(f"No key in {config.data_dir} yet. Start the server once (it creates the key), "
-              "or check --data-dir / the user you run this as.", file=sys.stderr)
+        print(
+            f"No key in {config.data_dir} yet. Start the server once (it creates the key), "
+            "or check --data-dir / the user you run this as.",
+            file=sys.stderr,
+        )
         return 1
     _print_key(store.load_or_create())
     return EXIT_OK
