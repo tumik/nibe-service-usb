@@ -57,6 +57,7 @@ class FakePump:
 
     def __init__(self, registers: dict[int, int] | None = None) -> None:
         self.registers: dict[int, int] = {**DEFAULT_REGISTERS, **(registers or {})}
+        self.long_registers: dict[int, int] = {}  # values printed by RL
         self.ram: dict[int, bytes] = {PI_TIMER_ADDRESS: bytes(3)}
         self.temperatures: list[int] = [0] * 28
         self.temperatures[0] = -34  # BT1
@@ -105,6 +106,17 @@ class FakePump:
     def last_ok(self) -> float | None:
         return 1_760_000_000.0
 
+    @property
+    def armed(self) -> bool:
+        return False
+
+    @property
+    def last_disarm(self) -> float | None:
+        return None
+
+    def on_armed_change(self, callback: object) -> None:
+        return None
+
     async def start(self) -> None:
         return None
 
@@ -136,7 +148,7 @@ class FakePump:
         """Every register touched by read/read_many, in order."""
         out: list[int] = []
         for name, *args in self.calls:
-            if name == "read_many":
+            if name in ("read_many", "read_long_many"):
                 out.extend(args[0])
             elif name == "read":
                 out.append(args[0])
@@ -152,6 +164,15 @@ class FakePump:
             if register in self.fail_registers:
                 raise self.fail_registers[register]
         return [self.registers.get(register, 0) for register in registers]
+
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        self._check("read_long_many", list(registers))
+        for register in registers:
+            if register in self.fail_registers:
+                raise self.fail_registers[register]
+        return [self.long_registers.get(register, 0) for register in registers]
 
     async def read_temperatures(self, *, priority: Priority = Priority.POLL) -> list[int]:
         self._check("read_temperatures")

@@ -3,7 +3,9 @@
 See ``docs/pump-interface.md`` (reply validation, write handling, offline
 detection). All access goes through one worker task draining a priority queue,
 so at most one request owns the port at any time and COMMAND requests overtake
-CONTROL and POLL ones.
+CONTROL and POLL ones. When the queue has been empty for
+``pump.idle_disarm_after`` seconds the worker disarms the port, so that a USB
+bus reset between polls cannot hang the pump's console.
 """
 
 from __future__ import annotations
@@ -76,6 +78,9 @@ class SerialPumpClient:
         self._errors = 0
         self._last_ok: float | None = None
         self._last_ok_mono: float = time.monotonic()
+        self._armed_callbacks: list[Callable[[bool], Awaitable[None] | None]] = []
+        self._armed_reported = False
+        self._last_disarm: float | None = None
 
     # -- properties ---------------------------------------------------------
 
@@ -95,8 +100,19 @@ class SerialPumpClient:
     def last_ok(self) -> float | None:
         return self._last_ok
 
+    @property
+    def armed(self) -> bool:
+        return self._transport is not None and self._transport.is_armed
+
+    @property
+    def last_disarm(self) -> float | None:
+        return self._last_disarm
+
     def on_state_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
         self._callbacks.append(callback)
+
+    def on_armed_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
+        self._armed_callbacks.append(callback)
 
     # -- lifecycle ----------------------------------------------------------
 
@@ -136,15 +152,19 @@ class SerialPumpClient:
         if self._transport is not None:
             with contextlib.suppress(Exception):
                 await self._transport.close()
+        await self._report_armed()
 
     async def _connect(self) -> None:
         """Open the port, flush stale bytes and require a valid ``b`` reply."""
         assert self._transport is not None
-        await self._transport.close()
-        await self._transport.open()
-        await self._transport.drain_input()
-        lines = await self._transport.request(codec.build_b(), timeout=self._config.request_timeout)
-        codec.parse_b(lines[0])
+        try:
+            await self._transport.close()
+            await self._transport.open()
+            await self._transport.drain_input()
+            lines = await self._transport.request(codec.build_b(), timeout=self._config.request_timeout)
+            codec.parse_b(lines[0])
+        finally:
+            await self._report_armed()  # opening the port arms it, whatever the reply was
         self._mark_ok()
 
     # -- online / offline ---------------------------------------------------
@@ -153,10 +173,22 @@ class SerialPumpClient:
         self._last_ok = time.time()
         self._last_ok_mono = time.monotonic()
 
-    async def _fire(self, online: bool) -> None:
-        for cb in list(self._callbacks):
+    async def _report_armed(self) -> None:
+        """Tell the listeners when the port changed between armed and disarmed."""
+        armed = self.armed
+        if armed == self._armed_reported:
+            return
+        self._armed_reported = armed
+        if not armed:
+            self._last_disarm = time.time()
+        await self._fire(armed, self._armed_callbacks)
+
+    async def _fire(
+        self, value: bool, callbacks: list[Callable[[bool], Awaitable[None] | None]] | None = None
+    ) -> None:
+        for cb in list(self._callbacks if callbacks is None else callbacks):
             try:
-                result = cb(online)
+                result = cb(value)
                 if inspect.isawaitable(result):
                     await result
             except asyncio.CancelledError:
@@ -211,9 +243,34 @@ class SerialPumpClient:
 
     # -- queue --------------------------------------------------------------
 
+    async def _next_request(self) -> _Request:
+        """Wait for the next request; disarm the port whenever the queue stays empty for a while."""
+        idle = self._config.idle_disarm_after
+        while idle > 0:
+            try:
+                async with asyncio.timeout(idle):
+                    _, _, req = await self._queue.get()
+            except TimeoutError:
+                await self._disarm()
+                continue
+            return req
+        _, _, req = await self._queue.get()
+        return req
+
+    async def _disarm(self) -> None:
+        if self._transport is None:
+            return
+        try:
+            await self._transport.disarm()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.debug("disarm failed: %s", exc)
+        await self._report_armed()
+
     async def _worker_loop(self) -> None:
         while True:
-            _, _, req = await self._queue.get()
+            req = await self._next_request()
             if req.future.done():  # caller gave up while queued
                 continue
             try:
@@ -228,6 +285,7 @@ class SerialPumpClient:
             else:
                 if not req.future.done():
                     req.future.set_result(result)
+            await self._report_armed()
 
     async def _submit(self, priority: Priority, op: Callable[[], Awaitable[T]]) -> T:
         if not self._online or self._worker is None:
@@ -317,6 +375,14 @@ class SerialPumpClient:
             out.extend(await self._read_chunk(chunk, priority))
         return out
 
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        out: list[int] = []
+        for chunk in self._chunks(registers):  # an RI line and an RL line have the same length
+            out.extend(await self._read_chunk(chunk, priority, build=codec.build_rl))
+        return out
+
     def _chunks(self, registers: Sequence[int]) -> list[list[int]]:
         cfg = self._config
         limit = min(cfg.ri_batch_size, codec.MAX_RI_REGISTERS)
@@ -342,8 +408,10 @@ class SerialPumpClient:
             chunks.append(current)
         return chunks
 
-    async def _read_chunk(self, chunk: list[int], priority: Priority) -> list[int]:
-        line = codec.build_ri(chunk, max_line_length=self._config.max_line_length)
+    async def _read_chunk(
+        self, chunk: list[int], priority: Priority, *, build: Callable[..., str] = codec.build_ri
+    ) -> list[int]:
+        line = build(chunk, max_line_length=self._config.max_line_length)
         count = len(chunk)
 
         async def op() -> list[int]:

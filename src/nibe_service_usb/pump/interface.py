@@ -118,10 +118,24 @@ class PumpClient(Protocol):
     @property
     def last_ok(self) -> float | None: ...
 
+    @property
+    def armed(self) -> bool:
+        """True while the console is listening and a USB bus reset would hang it."""
+        ...
+
+    @property
+    def last_disarm(self) -> float | None: ...
+
     async def read(self, register: int, *, priority: Priority = Priority.POLL) -> int: ...
 
     async def read_many(self, registers: Sequence[int], *, priority: Priority = Priority.POLL) -> list[int]:
         """Any number of registers; chunked into lines of ``ri_batch_size`` internally."""
+        ...
+
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        """``RL``: like ``read_many``, for time-of-day (seconds) and date (day number) registers."""
         ...
 
     async def read_temperatures(self, *, priority: Priority = Priority.POLL) -> list[int]:
@@ -144,4 +158,8 @@ class PumpClient(Protocol):
 
     def on_state_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
         """Register a callback invoked with ``True`` (online) / ``False`` (offline)."""
+        ...
+
+    def on_armed_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
+        """Register a callback invoked with ``True`` (armed) / ``False`` (disarmed)."""
         ...

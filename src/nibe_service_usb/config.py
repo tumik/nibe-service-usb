@@ -34,6 +34,8 @@ class PumpConfig:
     ri_batch_size: int = 9
     max_line_length: int = 61
     request_timeout: float = 3.0
+    arm_delay: float = 0.2
+    idle_disarm_after: float = 1.0
     retries: int = 2
     offline_after: float = 60.0
     daily_check_time: str = "03:30"
@@ -220,6 +222,8 @@ def _validate(cfg: Config) -> Config:
     _check(16 <= p.max_line_length <= 61, "pump.max_line_length", f"must be 16..61, got {p.max_line_length}")
     _check(p.baudrate > 0, "pump.baudrate", "must be positive")
     _check(p.request_timeout > 0, "pump.request_timeout", "must be positive")
+    _check(p.arm_delay >= 0, "pump.arm_delay", "must be >= 0")
+    _check(p.idle_disarm_after >= 0, "pump.idle_disarm_after", "must be >= 0")
     _check(p.retries >= 0, "pump.retries", "must be >= 0")
     _check(p.offline_after > 0, "pump.offline_after", "must be positive")
     _check(

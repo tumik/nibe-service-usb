@@ -54,6 +54,8 @@ default and a short comment. The tables below add the allowed ranges.
 | `ri_batch_size` | `9` | 1..10 | Registers per `RI` line. |
 | `max_line_length` | `61` | 16..61 | Hard limit per command line. |
 | `request_timeout` | `3.0` | > 0 | Seconds per reply. |
+| `arm_delay` | `0.2` | ≥ 0 | Seconds to wait after raising RTS before the first command, so the pump has started its read. |
+| `idle_disarm_after` | `1.0` | ≥ 0 | Idle seconds after which the port is disarmed (RTS low, one CR LF). Protects the pump console from USB bus resets; see [pump-interface.md](pump-interface.md#usb-bus-reset-hang-and-disarming). `0` keeps the port armed all the time. |
 | `retries` | `2` | ≥ 0 | Retries per request. |
 | `offline_after` | `60` | > 0 | Seconds without any reply until the pump counts as offline. |
 | `daily_check_time` | `"03:30"` | `"HH:MM"` | Daily health check, local time. |

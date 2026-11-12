@@ -161,7 +161,8 @@ Full server state for diagnostics and HA diagnostic entities. No params.
 ```json
 {"id":4,"ok":true,"data":{
   "version":"0.1.0","uptime":…,
-  "pump":{"online":true,"port":"/dev/ttyACM0","last_ok":…,"errors":0},
+  "pump":{"online":true,"port":"/dev/ttyACM0","last_ok":…,"errors":0,
+          "armed":false,"last_disarm":…},
   "heating":{"mode":"disable","active":true,"suspended_reason":null,
              "last_push":…,"next_push":…,"target_dm":-1,"current_dm":-15},
   "hot_water":{"mode":"normal","effective_mode":"normal","reason":"comfort",

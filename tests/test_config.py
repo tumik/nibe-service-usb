@@ -103,6 +103,8 @@ def test_unknown_key_names_dotted_key(tmp_path: Path, text: str, key: str) -> No
         ("[pump]\nmax_line_length = 62\n", "pump.max_line_length"),
         ("[pump]\ndaily_check_time = '3pm'\n", "pump.daily_check_time"),
         ("[server]\nlisten_port = 70000\n", "server.listen_port"),
+        ("[pump]\narm_delay = -1\n", "pump.arm_delay"),
+        ("[pump]\nidle_disarm_after = -0.5\n", "pump.idle_disarm_after"),
     ],
 )
 def test_range_errors(tmp_path: Path, text: str, key: str) -> None:

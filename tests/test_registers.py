@@ -33,6 +33,19 @@ def test_expected_sensors_present() -> None:
         "pi_remaining",
         "active_alarms",
         "set_start_comp",
+        "set_start_addheat",
+        "set_addheat_step_diff",
+        "set_max_diff_comp",
+        "set_max_diff_addheat",
+        "set_hw_pump_speed",
+        "addheat_time_factor",
+        "addheat_time_factor_hw",
+        "language",
+        "pi_days_until",
+        "pi_start_hour",
+        "tl_remaining",
+        "gp1_state",
+        "gp2_state",
         "uptime",
         "eeprom_store_calls",
         "eeprom_write_failures",
@@ -45,10 +58,17 @@ def test_expected_sensors_present() -> None:
         assert name in SENSORS, name
     assert SENSORS["uptime"].register == 43071
     assert SENSORS["country"].register == 48745
+    assert SENSORS["set_start_addheat"].register == 48072
+    assert SENSORS["set_addheat_step_diff"].register == 47209
 
 
 def test_registers_unique_per_source() -> None:
-    registers = [s.register for s in SENSORS.values() if s.register is not None]
+    # A register may be published twice only as a number plus its text form (`<name>_name`).
+    text_forms = {"country_name", "language_name"}
+    for name in text_forms:
+        assert SENSORS[name].register == SENSORS[name.removesuffix("_name")].register
+        assert SENSORS[name].kind == "enum"
+    registers = [s.register for s in SENSORS.values() if s.register is not None and s.name not in text_forms]
     assert len(registers) == len(set(registers))
 
 
@@ -219,3 +239,22 @@ def test_invalid_definitions(tmp_path: Path, body: str) -> None:
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(SensorDefError):
         load_sensor_defs(tmp_path / "nope.yaml")
+
+
+def test_country_language_and_pump_state_text() -> None:
+    assert decode(SENSORS["country_name"], 51) == "AX"
+    assert decode(SENSORS["country_name"], 15) == "FI"
+    assert decode(SENSORS["country_name"], 52) == "not_selected"
+    assert decode(SENSORS["country"], 51) == 51
+    assert decode(SENSORS["language_name"], 5) == "suomi"
+    assert decode(SENSORS["language"], 5) == 5
+    assert decode(SENSORS["gp1_state"], 10) == "off"
+    assert decode(SENSORS["gp2_state"], 20) == "on"
+    assert decode(SENSORS["gp1_state"], 50) == "unknown_50"
+
+
+def test_rl_types() -> None:
+    assert SENSORS["pi_start_hour"].type == "rl_hour"
+    assert decode(SENSORS["pi_start_hour"], 64800) == 18
+    assert decode(SENSORS["tl_remaining"], 10795) == 10795
+    assert decode(SENSORS["pi_days_until"], 14) == 14

@@ -29,10 +29,11 @@ from .interface import (
     PumpTimeout,
     WriteFailed,
 )
-from .registers import SensorDef
+from .registers import DATE_EPOCH, SensorDef
 
 DM_ADDRESS = 0x2038AF18
 PI_TIMER_ADDRESS = 0x2066718C
+PI_DAYS_REGISTER = 44259  # days until the next periodic increase
 PI_DURATION = 5 * 3600
 PI_TRIGGER_WINDOW = 30.0
 RT_FIELDS = 28
@@ -56,12 +57,25 @@ SEED_REGISTERS: dict[int, int] = {
     43109: 1,
     40313: 0,
     47206: -200,
+    48072: 400,
+    47378: 100,
+    47379: 70,
+    47413: 40,
+    47131: 5,
+    43081: 1523,
+    43239: 310,
+    47209: 100,
     47375: 180,
     43110: 0,
     43427: 20,
     43443: 5,
     43086: 10,
     43437: 0,
+    43431: 10,
+    47052: 2 * 3600,
+    44259: 9,
+    47526: 0,
+    43433: 10,
     43439: 0,
     43516: 0,
     43084: 0,
@@ -196,8 +210,19 @@ class SimulatedPumpClient:
     def last_ok(self) -> float | None:
         return self._last_ok
 
+    @property
+    def armed(self) -> bool:
+        return False  # no USB port behind the simulator
+
+    @property
+    def last_disarm(self) -> float | None:
+        return None
+
     def on_state_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
         self._callbacks.append(callback)
+
+    def on_armed_change(self, callback: Callable[[bool], Awaitable[None] | None]) -> None:
+        return None
 
     async def _access(self) -> None:
         """Common prologue of every request: offline check, latency, failure injection."""
@@ -223,6 +248,18 @@ class SimulatedPumpClient:
         regs = list(registers)
         for i in range(0, len(regs), batch):
             out.extend(await self._ri(regs[i : i + batch]))
+        return out
+
+    async def read_long_many(
+        self, registers: Sequence[int], *, priority: Priority = Priority.POLL
+    ) -> list[int]:
+        """``RL``: 44259 is printed as the day number of today + the stored day counter."""
+        await self._access()
+        today = (CLOCK_EPOCH + timedelta(seconds=self.registers.get(43071, 0))).date()
+        out = []
+        for r in registers:
+            value = self.registers.get(r, 0)
+            out.append(value + (today - DATE_EPOCH).days if r == PI_DAYS_REGISTER else value)
         return out
 
     async def _ri(self, registers: list[int]) -> list[int]:

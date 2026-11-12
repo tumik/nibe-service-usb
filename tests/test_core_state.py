@@ -20,7 +20,7 @@ def test_snapshot_status_shape_matches_protocol_doc() -> None:
         "identity",
         "clients",
     ]
-    assert set(status["pump"]) == {"online", "port", "last_ok", "errors"}
+    assert set(status["pump"]) == {"online", "port", "last_ok", "errors", "armed", "last_disarm"}
     assert set(status["heating"]) == {
         "mode",
         "active",

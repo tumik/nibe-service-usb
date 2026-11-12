@@ -23,7 +23,8 @@ def test_creation(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     assert text == key.hex()
     assert len(text) == 64
     assert any(
-        r.levelno == logging.WARNING and "Generated a new auth key" in r.getMessage()
+        r.levelno == logging.WARNING
+        and "Generated a new auth key" in r.getMessage()
         and key.hex() not in r.getMessage()
         for r in caplog.records
     )

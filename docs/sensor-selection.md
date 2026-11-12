@@ -54,6 +54,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `compressor_inhibit` | 43405 | u8 min | sensor, duration | explains "wanted but not running" |
 | `gp1_speed` | 43437 | % | sensor | heat medium pump |
 | `gp2_speed` | 43439 | % | sensor | brine pump |
+| `gp1_state` | 43431 | enum 10 off / 15 starting / 20 on / 40 ten_day_mode / 80 calibration | sensor | heat medium pump state: 10 = stopped (speed 0), 15 = step of about one second between 10 and 20 (speed 0), 20 = running, 40 = brine pump only, with operating mode R47139 = 30 (10 days continuous) for as long as the counter R43042 is above 0, 80 = forced run at 100 %. 50 = 120 s run after a high condenser temperature info (162/163); it has no name and shows as `unknown_50` |
+| `gp2_state` | 43433 | as `gp1_state` | sensor | brine pump |
 | `qn10_hot_water` | 43481 | 0/1 | binary_sensor | valve in hot water position |
 | `hw_mode` | 43109 | enum -1 off / 0 eco / 1 normal / 2 lux / 3 periodic | sensor enum | effective mode |
 | `hw_comfort` | 47041 | enum 0 eco / 1 normal / 2 lux | sensor enum (also the value the `set_hot_water_mode` command changes) | |
@@ -66,6 +68,8 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `pi_failure` | 45111 | 0/1 | binary_sensor, problem | periodic increase failed (info 181) |
 | `pi_running` | `RM 0x2066718C 3` ≠ 0 | 0/1 | binary_sensor, running | periodic increase in progress |
 | `pi_remaining` | same, h/m/s → seconds | s | sensor, duration | time the run can still last |
+| `pi_days_until` | `RL 44259` (date) minus the pump's own date | d | sensor, duration | days until the next periodic increase; counted down at midnight, equals the period right after a run; the run starts at `pi_start_hour` on day 0. Read every 10 minutes |
+| `tl_remaining` | `RL 47526` | s | sensor, duration | temporary lux time left, 0 when not running |
 | `pi_hold` | 43014 | 0/1 | binary_sensor | target reached, 1 h hold phase (only meaningful while running) |
 | `pi_enabled` | 47050 | 0/1 | binary_sensor | periodic increase enable bit (the trigger toggles it) |
 | `active_alarms` | 53 flag regs (6 `RI` lines of 9) | list of `{number, title}` | sensor (state = count, attribute = list) | one entity instead of 53 binary sensors; polled with core because info-class flags do not raise `any_alarm` |
@@ -77,14 +81,21 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `comp_starts` | 43416 | sensor, total_increasing |
 | `comp_hours` | 43420 | sensor, duration, total_increasing |
 | `comp_hours_hw` | 43424 | sensor, duration, total_increasing |
+| `addheat_time_factor` | 43081 | sensor, ×0.1 h, total_increasing; menu 3.3 "time factor" |
+| `addheat_time_factor_hw` | 43239 | sensor, ×0.1 h, total_increasing; menu 3.3 "- of which hot water" |
 
 ## Settings (hourly)
 
 | key | reg | scale | note |
 |---|---|---|---|
 | `set_start_comp` | 47206 | DM (plain integer, e.g. -200) | **used by the heating controller**: raw threshold = value × 10, enable target = value × 10 + 1 |
+| `set_start_addheat` | 48072 | DM (plain integer, default 400) | menu 4.9.3 "start diff additional heat": addition step 1 starts at `(set_start_comp − value) × 10` raw |
+| `set_addheat_step_diff` | 47209 | DM (plain integer, default 100) | menu 4.9.3 "diff. between additional steps" |
 | `set_stop_heating` | 47375 | ×0.1 °C | |
 | `set_stop_addheat` | 47376 | ×0.1 °C | |
+| `set_max_diff_comp` | 47378 | ×0.1 K | menu 5.1.3 "max diff compressor" |
+| `set_max_diff_addheat` | 47379 | ×0.1 K | menu 5.1.3 "max diff addition" |
+| `set_hw_pump_speed` | 47413 | % | menu 5.1.11, GP1 speed during a hot water charge |
 | `set_op_mode` | 47137 | enum 0 auto / 1 manual / 2 add_heat_only | mode 2 blocks the compressor; `enable` request is pointless then |
 | `set_el_max` | 47212 | ×0.01 kW | |
 | `set_curve` | 47007 | | |
@@ -94,12 +105,9 @@ BT25 (40071) and BT50 (40033) are not fitted; `sensors.yaml` lists them with
 | `set_hw_start_eco/normal/lux` | 47045 / 47044 / 47043 | ×0.1 °C | |
 | `set_hw_stop_eco/normal/lux` | 47049 / 47048 / 47047 | ×0.1 °C | |
 | `pi_period` | 47051 | days | |
+| `pi_start_hour` | `RL 47052` (seconds since midnight) / 3600 | h | hour of the day at which a due periodic increase starts |
 | `pi_stop_temp` | 47046 | ×0.1 °C | |
 | `set_filter_time` | 47377 | h | |
-
-Not implemented (would need the `RL` command for time/date typed registers):
-`pi_days_until` (44259, date → days), `pi_start_hour` (47052),
-`tl_remaining` (47526, seconds).
 
 ## Identity (health check: startup / reconnect / daily)
 
@@ -108,11 +116,14 @@ Sensors in `sensors.yaml` (tier `identity`):
 | key | source | HA |
 |---|---|---|
 | `base_version` | `RI 32041` (cross-checked against `RV` field 2) | diagnostic sensor |
-| `country` | 48745 | diagnostic sensor |
+| `country` | 48745 | diagnostic sensor (number) |
+| `country_name` | 48745 | diagnostic sensor, enum: ISO code (`AX`, `FI`, ...), `other` (0), `not_selected` (52) |
+| `language` | 47131 | diagnostic sensor (language pack index, 5 = Finnish) |
+| `language_name` | 47131 | diagnostic sensor, enum: name in the pump's language menu (`suomi`, `svenska`, ...) |
 | `uptime` | 43071 (u32 s; also read in every fast poll) | diagnostic sensor, duration; a decrease = restart |
 | `eeprom_store_calls` | 40969 | diagnostic sensor, total_increasing (calls to the store function, 1–4 bytes each) |
-| `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing |
-| `eeprom_write_failures_boot` | 40967 | diagnostic sensor |
+| `eeprom_write_failures` | 40965 | diagnostic sensor, total_increasing. Persisted count of EEPROM/RTC bus jobs that used all 10 tries (not only writes, see [pump-interface.md](pump-interface.md#startup--health-check-sequence)) |
+| `eeprom_write_failures_boot` | 40967 | diagnostic sensor; the same count since the display booted (RAM) |
 
 Fields of `get_status.identity` (not sensors; the integration can expose them
 as diagnostic entities):

@@ -52,6 +52,7 @@ class FakeTransport:
 
     def __init__(self) -> None:
         self.registers = dict(REGISTERS)
+        self.long_registers: dict[int, int] = {}  # values printed by RL
         self.sent: list[str] = []
         self.opened = 0
         self.closed = 0
@@ -67,6 +68,8 @@ class FakeTransport:
         self.active = 0
         self.max_active = 0
         self.drained = 0
+        self.disarmed = 0
+        self.armed = False
         self.raise_transport_error = False
 
     async def open(self) -> None:
@@ -76,12 +79,23 @@ class FakeTransport:
 
     async def close(self) -> None:
         self.closed += 1
+        self.armed = False
 
     async def drain_input(self) -> None:
         self.drained += 1
 
+    @property
+    def is_armed(self) -> bool:
+        return self.armed
+
+    async def disarm(self) -> None:
+        if self.armed:
+            self.armed = False
+            self.disarmed += 1
+
     async def request(self, line: str, *, expect_lines: int = 1, timeout: float) -> list[bytes]:  # noqa: ASYNC109
         codec.assert_allowed(line)
+        self.armed = True
         self.sent.append(line)
         self.active += 1
         self.max_active = max(self.max_active, self.active)
@@ -129,6 +143,8 @@ class FakeTransport:
             return [(";".join(str(i) for i in range(self.rt_fields)) + ";").encode()]
         if verb == "RI":
             return [("".join(f"{self.registers.get(int(a), 0)} " for a in args)).encode()]
+        if verb == "RL":
+            return [("".join(f"{self.long_registers.get(int(a), 0)} " for a in args)).encode()]
         if verb == "RM":
             address, length = int(args[0], 16), int(args[1])
             if address == DM_ADDR:
@@ -558,6 +574,124 @@ async def test_stop_fails_pending_requests_with_pump_offline() -> None:
         await client.read(1003)
 
 
+# -- disarming (USB bus reset protection) ---------------------------------------------------------------
+
+
+async def test_worker_disarms_when_idle_and_requests_arm_again() -> None:
+    cfg = dataclasses.replace(CFG, idle_disarm_after=0.03)
+    client, fake = await make_client(config=cfg)
+    try:
+        assert client.armed and client.last_disarm is None  # the connect check armed the port
+        await wait_for(lambda: fake.disarmed == 1)  # ... and the idle worker disarms it
+        await wait_for(lambda: client.last_disarm is not None)
+        assert not fake.armed and not client.armed
+        seen: list[bool] = []
+        client.on_armed_change(seen.append)
+        await client.read(40004)
+        assert fake.armed and client.armed
+        await wait_for(lambda: fake.disarmed == 2)
+        await wait_for(lambda: seen == [True, False])
+        assert not fake.armed
+        await asyncio.sleep(0.1)  # staying idle does not disarm again
+        assert fake.disarmed == 2
+        assert seen == [True, False] and not client.armed and client.last_disarm is not None
+    finally:
+        await client.stop()
+
+
+async def test_idle_disarm_can_be_switched_off() -> None:
+    cfg = dataclasses.replace(CFG, idle_disarm_after=0)
+    client, fake = await make_client(config=cfg)
+    try:
+        await client.read(40004)
+        await asyncio.sleep(0.1)
+        assert fake.disarmed == 0 and fake.armed
+    finally:
+        await client.stop()
+
+
+class _StubSerial:
+    def __init__(self, log: list[object], fail: bool = False) -> None:
+        self._log = log
+        self._fail = fail
+
+    @property
+    def rts(self) -> bool:
+        return True
+
+    @rts.setter
+    def rts(self, value: bool) -> None:
+        if self._fail:
+            raise OSError("not a serial port")
+        self._log.append(("rts", value))
+
+
+class _StubWriter:
+    def __init__(self, log: list[object], fail: bool = False) -> None:
+        self._log = log
+        self.transport = type("T", (), {"serial": _StubSerial(log, fail)})()
+
+    def write(self, data: bytes) -> None:
+        self._log.append(data)
+
+    async def drain(self) -> None:
+        pass
+
+    def close(self) -> None:
+        self._log.append("close")
+
+    async def wait_closed(self) -> None:
+        pass
+
+
+def _stub_transport(fail: bool = False) -> tuple[object, list[object], asyncio.StreamReader]:
+    from nibe_service_usb.pump.transport import SerialTransport
+
+    events: list[object] = []
+    transport = SerialTransport(dataclasses.replace(CFG, arm_delay=0))
+    reader = asyncio.StreamReader()
+    transport._reader, transport._writer = reader, _StubWriter(events, fail)  # type: ignore[assignment]
+    transport._armed = True
+    return transport, events, reader
+
+
+async def test_serial_transport_disarm_lowers_rts_then_sends_one_crlf() -> None:
+    transport, events, reader = _stub_transport()
+    await transport.disarm()
+    assert events == [("rts", False), b"\r\n"] and not transport.is_armed
+    await transport.disarm()  # already disarmed: nothing reaches the port
+    assert events == [("rts", False), b"\r\n"]
+    reader.feed_data(b"7994, 25, 0\r\n")
+    assert await transport.request("RV", timeout=0.5) == [b"7994, 25, 0"]
+    assert events[2:] == [("rts", True), b"RV\r\n"] and transport.is_armed
+
+
+async def test_serial_transport_close_disarms_first() -> None:
+    transport, events, _ = _stub_transport()
+    await transport.close()
+    assert events == [("rts", False), b"\r\n", "close"]
+
+
+async def test_serial_transport_without_rts_control_stays_armed_and_usable() -> None:
+    transport, events, reader = _stub_transport(fail=True)
+    await transport.disarm()
+    assert events == [] and transport.is_armed  # no dummy line, and no false "disarmed"
+    reader.feed_data(b"7994, 25, 0\r\n")
+    assert await transport.request("RV", timeout=0.5) == [b"7994, 25, 0"]
+    assert events == [b"RV\r\n"]
+
+
+async def test_serial_transport_failed_dummy_line_leaves_the_port_armed() -> None:
+    transport, events, reader = _stub_transport()
+
+    async def broken_drain() -> None:
+        raise OSError("write failed")
+
+    transport._writer.drain = broken_drain  # type: ignore[attr-defined]
+    await transport.disarm()
+    assert events == [("rts", False), b"\r\n", ("rts", True)] and transport.is_armed
+
+
 # -- the real transport against a pty ------------------------------------------------------------------
 
 
@@ -617,3 +751,11 @@ async def test_serial_transport_roundtrip_over_pty() -> None:
         await transport.close()
         os.close(master)
         os.close(slave)
+
+
+async def test_read_long_many_uses_rl(started) -> None:  # noqa: ANN001
+    client, fake = started
+    fake.long_registers = {47526: 10795, 44259: 7237}
+    assert await client.read_long_many([47526, 47052, 44259]) == [10795, 0, 7237]
+    assert fake.sent[-1] == "RL 47526 47052 44259"
+    assert await client.read_long_many([]) == []

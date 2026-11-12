@@ -37,7 +37,7 @@ QR AI RT RI RL RM WI WM`); anything else raises before reaching the port.
 | `AI` | 5 lines: `Year 2010 Month 1 Day 1` / `Hour 22 Minute 21 Second 45` / `DLS 0` / `TZ Helsinki W-Offset 2 S-Offset 3` / `Unixtime 1262373705` | clock check: compare `Unixtime` to host time, report drift |
 | `RT 1` | `v1;v2;…;v28` raw s16 ×0.1 °C | all BT temperatures in one line; field N is BT N (confirmed by the probe, see below; unused slots are constant 0 or -32768) |
 | `RI r1 [r2 … r9]` | raw integer(s), space separated, trailing space, CR LF: `46 254 ` | any register by number; **9 per line** (line ≤ 61 chars; the parser caps at 10 registers). Prints `0 ` for unknown ids in the 3xxxx–4xxxx range and for time/date typed registers; very low ids print other things (`RI 1` printed the product code string, `RI 10` printed an empty token), so only the documented register ids are ever sent. |
-| `RL r` | seconds / day number | time-of-day and date typed registers (`47052`, `44259`, `47526`). Allowed by the transport but not used yet. |
+| `RL r1 r2 …` | `v1 v2 … ` like `RI` | same as `RI` (same limits, plain registers print the same value), but it also prints the time-of-day and date typed registers, for which `RI` prints `0`: a time of day or countdown as **seconds** (`47052` = start hour × 3600, `47526`), a date as the **day number counted from 2007-01-01 = 0** (`44259` = the date of the next periodic increase, i.e. the pump's own date plus the day counter). An unknown register prints `ERR` in its place. Used for the sensors `pi_start_hour`, `pi_days_until` and `tl_remaining`. |
 | `RM 0x<addr> <n>` | `n` hex byte pairs, **each followed by a NUL byte**, then CR LF (`ec\0ff\0ff\0ff\0\r\n`) | raw RAM read. Used for the DM RAM copy (`RM 0x2038af18 4`, s32 little-endian) and the periodic-increase run timer (`RM 0x2066718C 3`, h m s). The parser strips NULs before decoding. |
 | `WI r v` | `1` | register write; goes through the firmware's "is this register persisted?" check and **costs one EEPROM store call** for persisted registers (measured for R40940). Used for settings that must persist (R47041, R47050), and for R40940 only with `dm_write_method = "register"`. |
 | `WM 0x<addr> <hex>` | `1` | raw RAM write, bytes as hex pairs in memory order (little-endian for integers): `WM 0x2038af18 00ffffff` = raw -256, `00010000` = +256. **No EEPROM store** (measured: counter unchanged across three writes, read-back via `RI 40940` correct). This is how degree minutes are written. |
@@ -134,11 +134,35 @@ answered for `pump.offline_after` (default 60 s) and then answers again, and
      physical writes; each call stores 1–4 bytes). Diagnostic sensor
      `eeprom_store_calls`, `total_increasing`; its rate per day is the useful
      number.
-   * R40965 = total EEPROM write failures (persisted). R40967 = failures
-     since boot (RAM). Non-zero means a write was retried 10 times and never
-     succeeded, leaving a wrong value in EEPROM. Any increase of R40965 or any
-     non-zero R40967 → `WARNING` and `get_status.identity.eeprom_write_failed
-     = true`.
+   * R40965 = failed jobs on the EEPROM/RTC bus, total (persisted, never
+     reset, not even by a factory reset). R40967 = the same count since the
+     display booted (RAM). Any increase of R40965 or any non-zero R40967 →
+     `WARNING` and `get_status.identity.eeprom_write_failed = true`.
+     The names say "write failures", but the firmware (display 7994R7, the
+     task that owns the bus) counts more loosely than that:
+     * Every job type counts: EEPROM write, EEPROM read (the settings load
+       at boot), clock read and clock write. A flaky clock chip raises the
+       counter without any EEPROM problem.
+     * A job counts when its try counter reaches 10. A write that succeeds
+       on the 10th try is counted although the value was stored.
+     * For a multi-byte value only the last byte written is evaluated; a
+       failed earlier byte is not counted.
+     * Each count stores R40965 itself, which is one more EEPROM job. With a
+       dead EEPROM that job fails too, so the counter keeps climbing by
+       itself and does not equal the number of lost settings.
+     * R40965 stops at 2147483647; R40967 does not.
+
+     * Nothing ever initialises R40965: no reset group covers it, and the
+       boot range check accepts anything in 0..2147483647. Bytes left at
+       its EEPROM address by the factory or an older firmware are shown as
+       they are. The test unit reads 754974720 (`0x2D000000`) with R40967 =
+       0. That cannot be a real count, because every count also adds one to
+       R40969, so a real count cannot be far above R40969.
+
+     Only changes carry information: the absolute value of R40965 does not.
+     So 0 means no job ever ran out of tries. Non-zero means the bus had
+     trouble, most likely a setting that was not stored, but the number is
+     not an exact count of failed writes.
 6. `RI 43071` → uptime, seconds since boot, unsigned decimal. Read at every
    health check **and** with every fast poll (cheap, one register). If the
    new value is smaller than the previous one the display restarted:
@@ -165,6 +189,45 @@ device, permission denied) is logged once as `pump not reachable on <port>`
 and handled by the same loop; the server keeps running. First successful
 `b` reply → `online`, full health check, full sensor poll, pending
 degree-minute push.
+
+## USB bus reset hang and disarming
+
+Measured on firmware 7994R7:
+
+* Once the host has raised RTS, the console listens for commands. The port is
+  then **armed**, and stays armed even after the host closes it.
+* A **USB bus reset** while the port is armed leaves the console deaf. The
+  device still enumerates as `03eb:6119`, but commands get no reply and
+  writes eventually block. Unplugging the cable does not help. **Only a
+  restart of the pump recovers it.**
+* A bus reset happens when the host reboots, when the cable is replugged and
+  on `usbreset 03eb:6119`.
+
+The server therefore **disarms** the port whenever it is idle: it lowers RTS
+and sends one CR LF. The pump ignores that line and stops listening. A bus
+reset is harmless in that state, and the next RTS raise arms the port again.
+Verified on hardware: disarm, `usbreset`, and the console answers again.
+
+* Disarm happens after `pump.idle_disarm_after` seconds without a request
+  (default 1 s) and always before the port is closed, so a clean service stop
+  or host shutdown is safe.
+* The next request raises RTS and waits `pump.arm_delay` (default 0.2 s).
+* Lowering RTS alone does not disarm, and neither does closing the port: the
+  console stops listening only when it receives a line while RTS is low.
+* What remains exposed: a bus reset in the middle of a poll (about a second
+  per minute), for example a host crash or power cut at that moment. A
+  service that is killed in the middle of a poll (SIGKILL, out of memory)
+  also leaves the port armed until it is started again.
+* No host-side recovery is known for a deaf console. Toggling RTS, a dummy
+  line, re-selecting the configuration, halting the endpoint and further bus
+  resets were tried against the firmware's USB code without effect.
+* The debug website shows the current state under Status → Pump (`USB port`,
+  `last disarm`); the `status` command reports it as `pump.armed` and
+  `pump.last_disarm`.
+* A port without RTS control (a pty, a TCP bridge) is never disarmed and is
+  reported as armed all the time; requests work as before.
+* Any other program that opens the port arms it too. After manual use, disarm
+  before unplugging or rebooting: lower RTS, write `\r\n`, then close.
 
 ## Console behaviour summary
 
@@ -218,8 +281,10 @@ class PumpClient(Protocol):
     async def start(self) -> None
     async def stop(self) -> None
     online: bool; port: str; error_count: int; last_ok: float | None          # properties
+    armed: bool; last_disarm: float | None                                    # properties, USB arming
     async def read(self, register: int, *, priority=Priority.POLL) -> int                   # raw
     async def read_many(self, registers: Sequence[int], *, priority=Priority.POLL) -> list[int]  # chunked into RI lines of ri_batch_size
+    async def read_long_many(self, registers: Sequence[int], *, priority=Priority.POLL) -> list[int]  # the same with RL (time and date registers)
     async def read_temperatures(self, *, priority=Priority.POLL) -> list[int]               # RT 1, 28 raw values
     async def read_ram(self, address: int, length: int, *, priority=Priority.POLL) -> bytes # RM
     async def write(self, register: int, value: int, *, priority=Priority.COMMAND) -> None  # WI, expects "1", read-back
@@ -227,4 +292,5 @@ class PumpClient(Protocol):
     async def identity(self, *, priority=Priority.CONTROL) -> Identity                     # b, RV, QR
     async def clock(self, *, priority=Priority.CONTROL) -> Clock                           # AI
     def on_state_change(self, callback) -> None                                             # online / offline
+    def on_armed_change(self, callback) -> None                                             # armed / disarmed
 ```
